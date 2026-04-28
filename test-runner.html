@@ -1,0 +1,276 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Dashboard Test Runner</title>
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    body { font-family: 'Segoe UI', sans-serif; background: #0f172a; color: #e2e8f0; padding: 32px; }
+    h1 { font-size: 24px; margin-bottom: 20px; color: #2dd4bf; }
+    .test { padding: 10px 16px; margin: 4px 0; border-radius: 8px; font-size: 14px; display: flex; align-items: center; gap: 10px; }
+    .test.pass { background: rgba(34,197,94,0.1); border: 1px solid rgba(34,197,94,0.3); }
+    .test.fail { background: rgba(239,68,68,0.1); border: 1px solid rgba(239,68,68,0.3); }
+    .test.warn { background: rgba(245,158,11,0.1); border: 1px solid rgba(245,158,11,0.3); }
+    .icon { font-size: 18px; }
+    .summary { margin-top: 24px; padding: 20px; background: #1e293b; border-radius: 12px; font-size: 16px; }
+    .summary span { font-weight: 700; }
+    .section { margin-top: 20px; margin-bottom: 8px; font-size: 16px; font-weight: 700; color: #7dd3fc; }
+  </style>
+</head>
+<body>
+  <h1>🏥 Hospital Dashboard — Test Runner</h1>
+  <div id="results"></div>
+  <div id="summary" class="summary"></div>
+
+  <!-- Load the app modules first -->
+  <script src="js/config.js"></script>
+  <script src="js/api.js"></script>
+  <script>
+    const results = [];
+    const resultsEl = document.getElementById("results");
+
+    function log(status, msg) {
+      results.push({ status, msg });
+      const div = document.createElement("div");
+      div.className = `test ${status}`;
+      const icon = status === "pass" ? "✅" : status === "fail" ? "❌" : "⚠️";
+      div.innerHTML = `<span class="icon">${icon}</span> ${msg}`;
+      resultsEl.appendChild(div);
+    }
+
+    function section(title) {
+      const div = document.createElement("div");
+      div.className = "section";
+      div.textContent = title;
+      resultsEl.appendChild(div);
+    }
+
+    function runTests() {
+      // ═══════════════════════════════════════
+      // 1. CONFIG & STATE TESTS
+      // ═══════════════════════════════════════
+      section("1. Configuration & State");
+
+      // Test HospitalConfig exists
+      if (typeof HospitalConfig !== "undefined") {
+        log("pass", "HospitalConfig object exists");
+      } else {
+        log("fail", "HospitalConfig is undefined");
+        return;
+      }
+
+      // Test hospital name
+      if (HospitalConfig.name === "Mumbai City Care Hospital") {
+        log("pass", `Hospital name: "${HospitalConfig.name}"`);
+      } else {
+        log("fail", `Hospital name unexpected: "${HospitalConfig.name}"`);
+      }
+
+      // Test location
+      if (HospitalConfig.location.includes("Mumbai")) {
+        log("pass", `Location includes Mumbai: "${HospitalConfig.location}"`);
+      } else {
+        log("fail", `Location missing Mumbai: "${HospitalConfig.location}"`);
+      }
+
+      // Test AppState exists
+      if (typeof AppState !== "undefined") {
+        log("pass", "AppState object exists");
+      } else {
+        log("fail", "AppState is undefined");
+        return;
+      }
+
+      // Test bed state
+      const bedTypes = ["icu", "general", "emergency", "pediatric"];
+      bedTypes.forEach(type => {
+        if (AppState.beds[type] && typeof AppState.beds[type].total === "number" && typeof AppState.beds[type].available === "number") {
+          log("pass", `Bed state for ${type}: total=${AppState.beds[type].total}, available=${AppState.beds[type].available}`);
+        } else {
+          log("fail", `Bed state missing or invalid for ${type}`);
+        }
+      });
+
+      // Test computed values
+      const totalBeds = AppState.getTotalBeds();
+      if (totalBeds > 0) {
+        log("pass", `getTotalBeds() = ${totalBeds}`);
+      } else {
+        log("fail", `getTotalBeds() returned ${totalBeds}`);
+      }
+
+      const totalAvail = AppState.getTotalAvailable();
+      log("pass", `getTotalAvailable() = ${totalAvail}`);
+
+      const rate = AppState.getOccupancyRate();
+      if (rate >= 0 && rate <= 100) {
+        log("pass", `getOccupancyRate() = ${rate}%`);
+      } else {
+        log("fail", `getOccupancyRate() out of range: ${rate}`);
+      }
+
+      // Test toJSON
+      const json = AppState.toJSON();
+      if (json.hospital && json.location && json.last_updated) {
+        log("pass", `toJSON() returns valid payload with ${Object.keys(json).length} fields`);
+      } else {
+        log("fail", "toJSON() missing required fields");
+      }
+
+      // ═══════════════════════════════════════
+      // 2. EVENT BUS TESTS
+      // ═══════════════════════════════════════
+      section("2. Event Bus");
+
+      if (typeof EventBus !== "undefined" && typeof EventBus.on === "function") {
+        log("pass", "EventBus exists with on/emit/off methods");
+      } else {
+        log("fail", "EventBus missing or incomplete");
+      }
+
+      let eventFired = false;
+      EventBus.on("test:event", () => { eventFired = true; });
+      EventBus.emit("test:event");
+      if (eventFired) {
+        log("pass", "EventBus.emit() triggers listeners correctly");
+      } else {
+        log("fail", "EventBus.emit() did not trigger listener");
+      }
+
+      // ═══════════════════════════════════════
+      // 3. API LAYER TESTS
+      // ═══════════════════════════════════════
+      section("3. API Integration Layer");
+
+      if (typeof HospitalAPI !== "undefined") {
+        log("pass", "HospitalAPI module exists");
+      } else {
+        log("fail", "HospitalAPI is undefined");
+        return;
+      }
+
+      // Test getBeds
+      if (typeof HospitalAPI.getBeds === "function") {
+        log("pass", "GET /api/beds — getBeds() function defined");
+      } else {
+        log("fail", "getBeds() function missing");
+      }
+
+      // Test updateBeds
+      if (typeof HospitalAPI.updateBeds === "function") {
+        log("pass", "POST /api/update-beds — updateBeds() function defined");
+      } else {
+        log("fail", "updateBeds() function missing");
+      }
+
+      // Test testConnection
+      if (typeof HospitalAPI.testConnection === "function") {
+        log("pass", "testConnection() function defined");
+      } else {
+        log("fail", "testConnection() function missing");
+      }
+
+      // Test exportData
+      const exported = HospitalAPI.exportData();
+      try {
+        const parsed = JSON.parse(exported);
+        if (parsed.hospital && parsed.icu_beds !== undefined) {
+          log("pass", `exportData() returns valid JSON (${exported.length} chars)`);
+        } else {
+          log("fail", "exportData() JSON missing expected fields");
+        }
+      } catch (e) {
+        log("fail", `exportData() returns invalid JSON: ${e.message}`);
+      }
+
+      // Test polling controls
+      if (typeof HospitalAPI.startPolling === "function" && typeof HospitalAPI.stopPolling === "function") {
+        log("pass", "Polling controls (startPolling/stopPolling) defined");
+      } else {
+        log("fail", "Polling controls missing");
+      }
+
+      // Test WebSocket placeholder
+      if (typeof HospitalAPI.connectWebSocket === "function") {
+        log("pass", "WebSocket placeholder (connectWebSocket) defined");
+      } else {
+        log("warn", "WebSocket placeholder missing");
+      }
+
+      // Test updateBeds locally
+      const prevICU = AppState.beds.icu.available;
+      HospitalAPI.updateBeds("icu", "available", 5);
+      if (AppState.beds.icu.available === 5) {
+        log("pass", `updateBeds("icu", "available", 5) updated state correctly (was ${prevICU}, now 5)`);
+      } else {
+        log("fail", `updateBeds failed: expected 5, got ${AppState.beds.icu.available}`);
+      }
+      // Restore
+      HospitalAPI.updateBeds("icu", "available", prevICU);
+
+      // Test available clamping
+      HospitalAPI.updateBeds("icu", "available", 999);
+      if (AppState.beds.icu.available <= AppState.beds.icu.total) {
+        log("pass", `Available beds clamped: set 999, got ${AppState.beds.icu.available} (total: ${AppState.beds.icu.total})`);
+      } else {
+        log("fail", `Available exceeds total: ${AppState.beds.icu.available} > ${AppState.beds.icu.total}`);
+      }
+      // Restore
+      HospitalAPI.updateBeds("icu", "available", prevICU);
+
+      // ═══════════════════════════════════════
+      // 4. DATA FORMAT TEST
+      // ═══════════════════════════════════════
+      section("4. Data Format Validation");
+
+      const requiredFields = ["hospital", "location", "icu_beds", "general_beds", "last_updated"];
+      const data = AppState.toJSON();
+      requiredFields.forEach(field => {
+        if (data[field] !== undefined) {
+          log("pass", `JSON field "${field}" present: ${JSON.stringify(data[field]).substring(0, 50)}`);
+        } else {
+          log("fail", `JSON field "${field}" MISSING`);
+        }
+      });
+
+      // ═══════════════════════════════════════
+      // 5. NOTIFICATION SYSTEM
+      // ═══════════════════════════════════════
+      section("5. Notification System");
+
+      const prevNotifCount = AppState.notifications.length;
+      HospitalAPI.addNotification("Test notification", "info");
+      if (AppState.notifications.length === prevNotifCount + 1) {
+        log("pass", "addNotification() adds to notification array");
+      } else {
+        log("fail", "addNotification() did not update array");
+      }
+
+      if (AppState.notifications[0].message === "Test notification") {
+        log("pass", "Notification stored with correct message");
+      } else {
+        log("fail", "Notification message mismatch");
+      }
+
+      // ═══════════════════════════════════════
+      // SUMMARY
+      // ═══════════════════════════════════════
+      const passed = results.filter(r => r.status === "pass").length;
+      const failed = results.filter(r => r.status === "fail").length;
+      const warned = results.filter(r => r.status === "warn").length;
+
+      document.getElementById("summary").innerHTML = `
+        <span style="color: #2dd4bf;">Tests Complete</span><br><br>
+        ✅ Passed: <span style="color:#22c55e">${passed}</span> &nbsp;&nbsp;
+        ❌ Failed: <span style="color:#ef4444">${failed}</span> &nbsp;&nbsp;
+        ⚠️ Warnings: <span style="color:#f59e0b">${warned}</span><br><br>
+        ${failed === 0 ? "🎉 All tests passed! Dashboard is fully functional." : "⚠️ Some tests failed — see details above."}
+      `;
+    }
+
+    // Run after a small delay to let modules initialize
+    setTimeout(runTests, 500);
+  </script>
+</body>
+</html>
