@@ -61,7 +61,21 @@ const HospitalAPI = (() => {
       timestamp: new Date().toISOString(),
     };
 
-    // If API is configured, send real request
+    // Always update local AppState immediately so UI reflects change
+    if (AppState.beds[bedType]) {
+      AppState.beds[bedType][field] = Math.max(0, parseInt(value) || 0);
+
+      // Ensure available never exceeds total
+      if (AppState.beds[bedType].available > AppState.beds[bedType].total) {
+        AppState.beds[bedType].available = AppState.beds[bedType].total;
+      }
+
+      AppState.lastUpdated = new Date().toISOString();
+      EventBus.emit("beds:updated", AppState.beds);
+      EventBus.emit("timestamp:updated", AppState.lastUpdated);
+    }
+
+    // If API is configured, also send to backend (fire-and-forget style)
     if (url && HospitalConfig.api.connected) {
       try {
         const response = await fetch(`${url}/api/update-beds`, {
@@ -75,29 +89,26 @@ const HospitalAPI = (() => {
         });
 
         if (!response.ok) throw new Error(`HTTP ${response.status}`);
-        const data = await response.json();
-        return { success: true, data };
+        const result = await response.json();
+
+        // If the server returns updated beds data, sync AppState with it
+        if (result.success && result.data && result.data.beds) {
+          for (const [type, vals] of Object.entries(result.data.beds)) {
+            if (AppState.beds[type]) {
+              AppState.beds[type].total = vals.total;
+              AppState.beds[type].available = vals.available;
+            }
+          }
+          AppState.lastUpdated = result.data.last_updated || new Date().toISOString();
+          EventBus.emit("beds:updated", AppState.beds);
+          EventBus.emit("timestamp:updated", AppState.lastUpdated);
+        }
+
+        return { success: true, data: result };
       } catch (error) {
         console.warn("[API] POST /api/update-beds failed:", error.message);
         return { success: false, error: error.message };
       }
-    }
-
-    // Fallback: update local state
-    if (AppState.beds[bedType]) {
-      AppState.beds[bedType][field] = Math.max(0, parseInt(value) || 0);
-
-      // Ensure available never exceeds total
-      if (field === "total" && AppState.beds[bedType].available > AppState.beds[bedType].total) {
-        AppState.beds[bedType].available = AppState.beds[bedType].total;
-      }
-      if (field === "available" && AppState.beds[bedType].available > AppState.beds[bedType].total) {
-        AppState.beds[bedType].available = AppState.beds[bedType].total;
-      }
-
-      AppState.lastUpdated = new Date().toISOString();
-      EventBus.emit("beds:updated", AppState.beds);
-      EventBus.emit("timestamp:updated", AppState.lastUpdated);
     }
 
     return { success: true, source: "local" };

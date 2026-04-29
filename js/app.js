@@ -158,7 +158,7 @@ const App = (() => {
     val = Math.max(0, val);
     if (field === "available") val = Math.min(val, b.total);
     HospitalAPI.updateBeds(type, field, val);
-    renderBedGrid();
+    // renderBedGrid is triggered via EventBus "beds:updated" event
     HospitalAPI.addNotification(`${type.toUpperCase()} ${field} → ${val}`, "success");
   }
 
@@ -166,7 +166,7 @@ const App = (() => {
     let val = Math.max(0, parseInt(value) || 0);
     if (field === "available") val = Math.min(val, AppState.beds[type].total);
     HospitalAPI.updateBeds(type, field, val);
-    renderBedGrid();
+    // renderBedGrid is triggered via EventBus "beds:updated" event
   }
 
   function renderReports() {
