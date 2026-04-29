@@ -1,0 +1,408 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Hospital Central Hub — Connect & Track All Hospitals</title>
+  <meta name="description" content="Central hospital tracking hub. Connect unlimited hospital APIs, fetch real-time bed data, and monitor all hospitals from one dashboard." />
+  <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🌐</text></svg>" />
+  <link rel="stylesheet" href="css/styles.css" />
+  <style>
+    /* Hub-specific overrides */
+    .hub-hero { background: linear-gradient(135deg, #0f172a 0%, #1e3a5f 40%, #0d9488 100%); padding: 40px 0; color: white; text-align: center; }
+    .hub-hero h2 { font-size: 32px; font-weight: 800; letter-spacing: -0.03em; }
+    .hub-hero p { font-size: 15px; opacity: 0.7; margin-top: 6px; }
+    .hub-stats { display: flex; gap: 0; background: white; border-radius: 14px; box-shadow: 0 4px 20px rgba(0,0,0,0.1); margin: -30px auto 32px; max-width: 900px; overflow: hidden; border: 1px solid #e2e8f0; position: relative; z-index: 10; }
+    .hub-stat { flex: 1; padding: 24px 20px; text-align: center; border-right: 1px solid #e2e8f0; }
+    .hub-stat:last-child { border-right: none; }
+    .hub-stat .val { font-size: 32px; font-weight: 800; color: #0f172a; letter-spacing: -0.03em; }
+    .hub-stat .lbl { font-size: 12px; color: #64748b; font-weight: 500; margin-top: 2px; }
+    .add-form { display: grid; grid-template-columns: 1.5fr 2fr 1fr auto; gap: 12px; align-items: end; margin-bottom: 24px; }
+    .add-form .field label { display: block; font-size: 12px; font-weight: 600; color: #475569; margin-bottom: 5px; text-transform: uppercase; letter-spacing: 0.04em; }
+    .add-form .field input { width: 100%; height: 42px; padding: 0 14px; border: 1px solid #cbd5e1; border-radius: 6px; font-size: 13px; font-family: 'Inter', sans-serif; outline: none; }
+    .add-form .field input:focus { border-color: #2563eb; box-shadow: 0 0 0 3px rgba(37,99,235,0.1); }
+    .toolbar { display: flex; align-items: center; justify-content: space-between; margin-bottom: 16px; flex-wrap: wrap; gap: 10px; }
+    .toolbar-left { display: flex; align-items: center; gap: 10px; }
+    .toolbar-right { display: flex; align-items: center; gap: 8px; }
+    .search-box { width: 280px; height: 38px; padding: 0 12px 0 36px; border: 1px solid #cbd5e1; border-radius: 6px; font-size: 13px; outline: none; background: white url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='16' height='16' viewBox='0 0 24 24' fill='none' stroke='%2394a3b8' stroke-width='2'%3E%3Ccircle cx='11' cy='11' r='8'/%3E%3Cpath d='m21 21-4.3-4.3'/%3E%3C/svg%3E") no-repeat 10px center; }
+    .search-box:focus { border-color: #2563eb; }
+    .hospital-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(340px, 1fr)); gap: 16px; margin-bottom: 24px; }
+    .hosp-card { background: white; border-radius: 12px; border: 1px solid #e2e8f0; overflow: hidden; transition: box-shadow 0.2s, transform 0.2s; }
+    .hosp-card:hover { box-shadow: 0 8px 24px rgba(0,0,0,0.08); transform: translateY(-2px); }
+    .hosp-card-top { padding: 18px 20px; display: flex; align-items: center; gap: 14px; }
+    .hosp-avatar { width: 44px; height: 44px; border-radius: 10px; display: flex; align-items: center; justify-content: center; font-size: 22px; flex-shrink: 0; }
+    .hosp-avatar.online { background: #dcfce7; }
+    .hosp-avatar.offline { background: #fee2e2; }
+    .hosp-avatar.pending { background: #f1f5f9; }
+    .hosp-name { font-size: 14px; font-weight: 700; color: #1e293b; }
+    .hosp-url { font-size: 11px; color: #94a3b8; font-family: 'JetBrains Mono', monospace; word-break: break-all; }
+    .hosp-status { margin-left: auto; }
+    .hosp-status-dot { display: inline-flex; align-items: center; gap: 5px; padding: 4px 10px; border-radius: 20px; font-size: 11px; font-weight: 600; }
+    .hosp-status-dot.online { background: #dcfce7; color: #15803d; }
+    .hosp-status-dot.offline { background: #fee2e2; color: #b91c1c; }
+    .hosp-status-dot.pending { background: #f1f5f9; color: #64748b; }
+    .hosp-status-dot.timeout { background: #fef9c3; color: #a16207; }
+    .hosp-card-data { padding: 0 20px 16px; display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; }
+    .hosp-data-item { background: #f8fafc; border-radius: 8px; padding: 10px; text-align: center; }
+    .hosp-data-item .dv { font-size: 18px; font-weight: 800; color: #0f172a; }
+    .hosp-data-item .dl { font-size: 10px; color: #64748b; font-weight: 600; text-transform: uppercase; letter-spacing: 0.03em; }
+    .hosp-card-actions { padding: 12px 20px; border-top: 1px solid #f1f5f9; display: flex; gap: 8px; justify-content: flex-end; }
+    .hosp-card-actions button { padding: 6px 12px; border-radius: 6px; font-size: 11px; font-weight: 600; cursor: pointer; border: 1px solid #e2e8f0; background: white; color: #475569; transition: all 0.15s; }
+    .hosp-card-actions button:hover { background: #f1f5f9; }
+    .hosp-card-actions .del-btn { color: #b91c1c; border-color: #fecaca; }
+    .hosp-card-actions .del-btn:hover { background: #fee2e2; }
+    .progress-bar-wrap { width: 100%; height: 6px; background: #e2e8f0; border-radius: 3px; margin: 12px 0; overflow: hidden; display: none; }
+    .progress-bar-wrap.active { display: block; }
+    .progress-bar-fill { height: 100%; background: linear-gradient(90deg, #2563eb, #0d9488); border-radius: 3px; transition: width 0.3s; width: 0%; }
+    .empty-state { text-align: center; padding: 60px 20px; color: #94a3b8; }
+    .empty-state .icon { font-size: 48px; margin-bottom: 16px; }
+    .empty-state h3 { font-size: 18px; color: #475569; margin-bottom: 6px; }
+    .import-area { display: none; margin-bottom: 20px; }
+    .import-area.open { display: block; }
+    .import-area textarea { width: 100%; height: 120px; padding: 12px; border: 1px solid #cbd5e1; border-radius: 8px; font-family: 'JetBrains Mono', monospace; font-size: 12px; resize: vertical; outline: none; }
+    .count-badge { background: #dbeafe; color: #1d4ed8; font-size: 11px; font-weight: 700; padding: 2px 8px; border-radius: 10px; }
+    @media (max-width: 768px) {
+      .add-form { grid-template-columns: 1fr; }
+      .hub-stats { flex-direction: column; margin: -20px 16px 24px; }
+      .hub-stat { border-right: none; border-bottom: 1px solid #e2e8f0; }
+      .hospital-grid { grid-template-columns: 1fr; }
+      .search-box { width: 100%; }
+    }
+  </style>
+</head>
+<body>
+
+  <!-- TOP BAR -->
+  <header class="top-bar">
+    <div class="top-bar-inner">
+      <div class="brand">
+        <div class="brand-emblem">🌐</div>
+        <div class="brand-text">
+          <h1>Hospital Central Hub</h1>
+          <p>Multi-Hospital Real-Time Tracking System</p>
+        </div>
+      </div>
+      <div class="top-bar-actions">
+        <div class="live-badge"><span class="dot"></span> Hub Active</div>
+        <a href="index.html" class="login-btn">🏥 Hospital Dashboard</a>
+      </div>
+    </div>
+  </header>
+
+  <!-- HERO BANNER -->
+  <section class="hub-hero">
+    <h2>🌐 Central Hospital Tracking Hub</h2>
+    <p>Connect unlimited hospital APIs • Fetch real-time bed data • Monitor everything in one place</p>
+  </section>
+
+  <!-- AGGREGATE STATS -->
+  <div class="hub-stats">
+    <div class="hub-stat"><div class="val" id="agg-hospitals">0</div><div class="lbl">Connected Hospitals</div></div>
+    <div class="hub-stat"><div class="val" id="agg-online">0</div><div class="lbl">Online Now</div></div>
+    <div class="hub-stat"><div class="val" id="agg-beds">0</div><div class="lbl">Total Beds</div></div>
+    <div class="hub-stat"><div class="val" id="agg-avail">0</div><div class="lbl">Available Beds</div></div>
+    <div class="hub-stat"><div class="val" id="agg-icu">0</div><div class="lbl">ICU Available</div></div>
+  </div>
+
+  <!-- MAIN CONTENT -->
+  <div class="main-content">
+
+    <!-- ADD CONNECTION FORM -->
+    <div class="card">
+      <div class="card-header">
+        <div class="card-title">➕ Add Hospital Connection</div>
+      </div>
+      <div class="card-body">
+        <div class="add-form">
+          <div class="field">
+            <label>Hospital Name</label>
+            <input type="text" id="add-name" placeholder="e.g. Mumbai City Care Hospital" />
+          </div>
+          <div class="field">
+            <label>API URL</label>
+            <input type="url" id="add-url" placeholder="https://hospital-data.vercel.app" style="font-family:'JetBrains Mono',monospace;font-size:12px;" />
+          </div>
+          <div class="field">
+            <label>API Key (optional)</label>
+            <input type="password" id="add-key" placeholder="API key" />
+          </div>
+          <div><button class="btn btn-primary" id="add-btn" style="height:42px;">➕ Add</button></div>
+        </div>
+      </div>
+    </div>
+
+    <!-- IMPORT AREA -->
+    <div class="import-area" id="import-area">
+      <div class="card">
+        <div class="card-header"><div class="card-title">📥 Import Hospitals (JSON)</div></div>
+        <div class="card-body">
+          <textarea id="import-json" placeholder='Paste JSON array: [{"name":"Hospital","url":"https://...","apiKey":""}]'></textarea>
+          <div style="margin-top:10px;display:flex;gap:8px;">
+            <button class="btn btn-primary btn-sm" id="import-btn">Import</button>
+            <button class="btn btn-outline btn-sm" onclick="document.getElementById('import-area').classList.remove('open')">Cancel</button>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- TOOLBAR -->
+    <div class="toolbar">
+      <div class="toolbar-left">
+        <h3 class="section-title" style="margin-bottom:0;">Connected Hospitals <span class="count-badge" id="count-badge">0</span></h3>
+      </div>
+      <div class="toolbar-right">
+        <input type="text" class="search-box" id="search-box" placeholder="Search hospitals..." />
+        <button class="btn btn-primary btn-sm" id="fetch-all-btn">🔄 Fetch All</button>
+        <button class="btn btn-outline btn-sm" id="export-btn">📥 Export</button>
+        <button class="btn btn-outline btn-sm" id="import-toggle-btn">📤 Import</button>
+        <button class="btn btn-danger btn-sm" id="clear-all-btn">🗑️ Clear All</button>
+      </div>
+    </div>
+
+    <!-- PROGRESS BAR -->
+    <div class="progress-bar-wrap" id="progress-wrap">
+      <div class="progress-bar-fill" id="progress-fill"></div>
+    </div>
+
+    <!-- HOSPITAL CARDS GRID -->
+    <div class="hospital-grid" id="hospital-grid">
+      <!-- Rendered by JS -->
+    </div>
+
+    <!-- EMPTY STATE -->
+    <div class="empty-state" id="empty-state" style="display:none;">
+      <div class="icon">🏥</div>
+      <h3>No hospitals connected yet</h3>
+      <p>Add your first hospital API connection above to get started.</p>
+    </div>
+
+  </div>
+
+  <!-- FOOTER -->
+  <footer class="site-footer">
+    <div><strong>Hospital Central Hub</strong> — Real-Time Multi-Hospital Tracking</div>
+    <div style="margin-top:4px;">Supports unlimited hospital connections • Data stored locally in your browser</div>
+  </footer>
+
+  <!-- TOAST -->
+  <div class="toast-container" id="toast-container"></div>
+
+  <!-- SCRIPTS -->
+  <script src="js/hub.js"></script>
+  <script>
+    const $ = s => document.querySelector(s);
+    const $$ = s => document.querySelectorAll(s);
+
+    // ── Toast ──
+    function showToast(msg, type = "info") {
+      const c = $(".toast-container"); if (!c) return;
+      const icons = { success: "✅", danger: "❌", warning: "⚠️", info: "ℹ️" };
+      const t = document.createElement("div"); t.className = `toast ${type}`;
+      t.innerHTML = `<span>${icons[type] || "ℹ️"}</span> ${msg}`; c.appendChild(t);
+      setTimeout(() => t.remove(), 4000);
+    }
+
+    // ── Render aggregate stats ──
+    function renderStats() {
+      const s = Hub.getAggregateStats();
+      $("#agg-hospitals").textContent = s.totalHospitals;
+      $("#agg-online").textContent = s.onlineCount;
+      $("#agg-beds").textContent = s.totalBeds.toLocaleString();
+      $("#agg-avail").textContent = s.totalAvailable.toLocaleString();
+      $("#agg-icu").textContent = s.totalICUAvail.toLocaleString();
+      $("#count-badge").textContent = s.totalHospitals;
+    }
+
+    // ── Render hospital cards ──
+    function renderCards(filter = "") {
+      const list = Hub.getConnections();
+      const filtered = filter ? list.filter(c =>
+        c.name.toLowerCase().includes(filter.toLowerCase()) ||
+        c.url.toLowerCase().includes(filter.toLowerCase())
+      ) : list;
+
+      const grid = $("#hospital-grid");
+      const empty = $("#empty-state");
+
+      if (filtered.length === 0) {
+        grid.innerHTML = "";
+        empty.style.display = list.length === 0 ? "block" : "none";
+        if (list.length > 0 && filtered.length === 0) {
+          grid.innerHTML = '<div class="empty-state"><div class="icon">🔍</div><h3>No matching hospitals</h3></div>';
+        }
+        return;
+      }
+
+      empty.style.display = "none";
+
+      grid.innerHTML = filtered.map(c => {
+        const d = c.lastData;
+        const statusCls = c.lastStatus || "pending";
+        const statusLabel = { online: "✅ Online", offline: "❌ Offline", timeout: "⏱️ Timeout", pending: "⏳ Pending" }[statusCls] || "⏳ Pending";
+
+        let totalBeds = "—", availBeds = "—", icuBeds = "—";
+        if (d) {
+          totalBeds = d.total_beds ?? "—";
+          availBeds = d.total_available ?? "—";
+          if (d.beds) {
+            icuBeds = d.beds.icu?.available ?? "—";
+          } else {
+            icuBeds = d.icu_beds ?? "—";
+          }
+        }
+
+        const lastTime = c.lastFetched ? new Date(c.lastFetched).toLocaleTimeString("en-IN", { hour: "2-digit", minute: "2-digit", hour12: true }) : "Never";
+
+        return `<div class="hosp-card" data-id="${c.id}">
+          <div class="hosp-card-top">
+            <div class="hosp-avatar ${statusCls}">🏥</div>
+            <div style="flex:1;min-width:0;">
+              <div class="hosp-name">${esc(c.name)}</div>
+              <div class="hosp-url">${esc(c.url)}</div>
+            </div>
+            <div class="hosp-status">
+              <span class="hosp-status-dot ${statusCls}">${statusLabel}</span>
+            </div>
+          </div>
+          <div class="hosp-card-data">
+            <div class="hosp-data-item"><div class="dv">${totalBeds}</div><div class="dl">Total Beds</div></div>
+            <div class="hosp-data-item"><div class="dv">${availBeds}</div><div class="dl">Available</div></div>
+            <div class="hosp-data-item"><div class="dv">${icuBeds}</div><div class="dl">ICU Avail</div></div>
+          </div>
+          <div class="hosp-card-actions">
+            <span style="font-size:11px;color:#94a3b8;margin-right:auto;">Last: ${lastTime}</span>
+            <button onclick="fetchOne('${c.id}')">🔄 Fetch</button>
+            <button class="del-btn" onclick="removeHosp('${c.id}')">🗑️ Remove</button>
+          </div>
+        </div>`;
+      }).join("");
+    }
+
+    function esc(s) { const d = document.createElement("div"); d.textContent = s; return d.innerHTML; }
+
+    // ── Add hospital ──
+    $("#add-btn").addEventListener("click", () => {
+      const name = $("#add-name").value.trim();
+      const url = $("#add-url").value.trim();
+      const key = $("#add-key").value.trim();
+
+      if (!name) { showToast("Enter a hospital name", "warning"); return; }
+      if (!url) { showToast("Enter an API URL", "warning"); return; }
+
+      Hub.addConnection(name, url, key);
+      $("#add-name").value = "";
+      $("#add-url").value = "";
+      $("#add-key").value = "";
+      renderCards();
+      renderStats();
+      showToast(`${name} added!`, "success");
+    });
+
+    // Enter key support
+    ["add-name", "add-url", "add-key"].forEach(id => {
+      $(`#${id}`).addEventListener("keydown", e => { if (e.key === "Enter") $("#add-btn").click(); });
+    });
+
+    // ── Fetch single ──
+    async function fetchOne(id) {
+      const conn = Hub.getConnection(id);
+      if (!conn) return;
+      showToast(`Fetching ${conn.name}...`, "info");
+      await Hub.fetchHospital(conn);
+      renderCards($("#search-box").value);
+      renderStats();
+      const updated = Hub.getConnection(id);
+      if (updated?.lastStatus === "online") {
+        showToast(`${conn.name} — data fetched!`, "success");
+      } else {
+        showToast(`${conn.name} — connection failed`, "danger");
+      }
+    }
+
+    // ── Remove hospital ──
+    function removeHosp(id) {
+      const conn = Hub.getConnection(id);
+      if (confirm(`Remove "${conn?.name || id}"?`)) {
+        Hub.removeConnection(id);
+        renderCards($("#search-box").value);
+        renderStats();
+        showToast("Hospital removed", "info");
+      }
+    }
+
+    // ── Fetch All ──
+    $("#fetch-all-btn").addEventListener("click", async () => {
+      const list = Hub.getConnections();
+      if (list.length === 0) { showToast("No hospitals to fetch", "warning"); return; }
+
+      const wrap = $("#progress-wrap");
+      const fill = $("#progress-fill");
+      wrap.classList.add("active");
+      fill.style.width = "0%";
+
+      showToast(`Fetching ${list.length} hospitals...`, "info");
+
+      await Hub.fetchAll((done, total) => {
+        fill.style.width = `${Math.round((done / total) * 100)}%`;
+      });
+
+      wrap.classList.remove("active");
+      renderCards($("#search-box").value);
+      renderStats();
+
+      const stats = Hub.getAggregateStats();
+      showToast(`Done! ${stats.onlineCount}/${stats.totalHospitals} online`, "success");
+    });
+
+    // ── Search ──
+    $("#search-box").addEventListener("input", (e) => {
+      renderCards(e.target.value);
+    });
+
+    // ── Export ──
+    $("#export-btn").addEventListener("click", () => {
+      const json = Hub.exportAll();
+      const blob = new Blob([json], { type: "application/json" });
+      const a = document.createElement("a"); a.href = URL.createObjectURL(blob);
+      a.download = `hospital_hub_export_${Date.now()}.json`; a.click();
+      showToast("Data exported!", "success");
+    });
+
+    // ── Import ──
+    $("#import-toggle-btn").addEventListener("click", () => {
+      $("#import-area").classList.toggle("open");
+    });
+
+    $("#import-btn").addEventListener("click", () => {
+      const json = $("#import-json").value.trim();
+      if (!json) { showToast("Paste JSON first", "warning"); return; }
+      const result = Hub.importConnections(json);
+      if (result.success) {
+        showToast(`Imported ${result.count} hospitals!`, "success");
+        $("#import-json").value = "";
+        $("#import-area").classList.remove("open");
+        renderCards();
+        renderStats();
+      } else {
+        showToast(`Import failed: ${result.error}`, "danger");
+      }
+    });
+
+    // ── Clear All ──
+    $("#clear-all-btn").addEventListener("click", () => {
+      const count = Hub.getConnections().length;
+      if (count === 0) { showToast("Nothing to clear", "info"); return; }
+      if (confirm(`Remove all ${count} hospital connections?`)) {
+        localStorage.removeItem("hospital_hub_connections");
+        renderCards();
+        renderStats();
+        showToast("All connections cleared", "info");
+      }
+    });
+
+    // ── Init ──
+    renderCards();
+    renderStats();
+  </script>
+</body>
+</html>
