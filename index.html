@@ -4,12 +4,82 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>Mumbai City Care Hospital — Dashboard</title>
-  <meta name="description" content="Real-time hospital bed management dashboard for Mumbai City Care Hospital. Track ICU, General, Emergency, and Pediatric bed availability." />
+  <meta name="description" content="Real-time hospital bed management dashboard for Mumbai City Care Hospital." />
   <meta name="theme-color" content="#1a2240" />
   <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🏥</text></svg>" />
   <link rel="stylesheet" href="css/styles.css" />
+  <style>
+    /* ── Login Modal ── */
+    .modal-overlay{position:fixed;inset:0;background:rgba(15,23,42,0.7);backdrop-filter:blur(6px);z-index:2000;display:flex;align-items:center;justify-content:center;opacity:0;pointer-events:none;transition:opacity .3s}
+    .modal-overlay.open{opacity:1;pointer-events:auto}
+    .modal-box{background:#fff;border-radius:16px;padding:36px;width:380px;max-width:90vw;box-shadow:0 20px 60px rgba(0,0,0,.25);text-align:center;transform:scale(.9);transition:transform .3s}
+    .modal-overlay.open .modal-box{transform:scale(1)}
+    .modal-box .icon{font-size:48px;margin-bottom:12px}
+    .modal-box h3{font-size:20px;font-weight:700;color:#1e293b;margin-bottom:4px}
+    .modal-box p{font-size:13px;color:#64748b;margin-bottom:20px}
+    .modal-box input{width:100%;height:46px;padding:0 16px;border:2px solid #e2e8f0;border-radius:10px;font-size:14px;outline:none;transition:border .2s;font-family:inherit}
+    .modal-box input:focus{border-color:#2563eb}
+    .modal-box .error-msg{color:#ef4444;font-size:12px;margin-top:6px;min-height:18px}
+    .modal-box .modal-btns{display:flex;gap:10px;margin-top:16px}
+    .modal-box .modal-btns button{flex:1;height:42px;border:none;border-radius:8px;font-size:14px;font-weight:600;cursor:pointer}
+    .modal-box .btn-login{background:#2563eb;color:#fff}
+    .modal-box .btn-login:hover{background:#1d4ed8}
+    .modal-box .btn-cancel{background:#f1f5f9;color:#475569}
+    /* ── Admin badge ── */
+    .admin-badge{display:none;align-items:center;gap:5px;background:rgba(34,197,94,.15);border:1px solid rgba(34,197,94,.3);color:#86efac;padding:5px 12px;border-radius:16px;font-size:11px;font-weight:600;cursor:pointer}
+    .admin-badge.visible{display:flex}
+    /* ── Hub-specific styles ── */
+    .hub-stats-row{display:flex;gap:0;background:#fff;border-radius:14px;box-shadow:0 4px 20px rgba(0,0,0,.08);overflow:hidden;border:1px solid #e2e8f0;margin-bottom:24px}
+    .hub-stat-item{flex:1;padding:22px 16px;text-align:center;border-right:1px solid #e2e8f0}
+    .hub-stat-item:last-child{border-right:none}
+    .hub-stat-item .hv{font-size:28px;font-weight:800;color:#0f172a;letter-spacing:-.03em}
+    .hub-stat-item .hl{font-size:11px;color:#64748b;font-weight:500;margin-top:2px}
+    .hub-add-form{display:grid;grid-template-columns:1.5fr 2fr 1fr auto;gap:12px;align-items:end}
+    .hub-add-form .field label{display:block;font-size:11px;font-weight:600;color:#475569;margin-bottom:5px;text-transform:uppercase;letter-spacing:.04em}
+    .hub-add-form .field input{width:100%;height:42px;padding:0 14px;border:1px solid #cbd5e1;border-radius:6px;font-size:13px;outline:none;font-family:inherit}
+    .hub-add-form .field input:focus{border-color:#2563eb;box-shadow:0 0 0 3px rgba(37,99,235,.1)}
+    .hub-toolbar{display:flex;align-items:center;justify-content:space-between;margin-bottom:14px;flex-wrap:wrap;gap:10px}
+    .hub-search{width:260px;height:38px;padding:0 12px 0 34px;border:1px solid #cbd5e1;border-radius:6px;font-size:13px;outline:none;background:#fff url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='14' height='14' viewBox='0 0 24 24' fill='none' stroke='%2394a3b8' stroke-width='2'%3E%3Ccircle cx='11' cy='11' r='8'/%3E%3Cpath d='m21 21-4.3-4.3'/%3E%3C/svg%3E") no-repeat 10px center}
+    .hub-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(340px,1fr));gap:16px;margin-bottom:24px}
+    .hcard{background:#fff;border-radius:12px;border:1px solid #e2e8f0;overflow:hidden;transition:box-shadow .2s,transform .2s}
+    .hcard:hover{box-shadow:0 8px 24px rgba(0,0,0,.08);transform:translateY(-2px)}
+    .hcard-top{padding:16px 18px;display:flex;align-items:center;gap:12px}
+    .hcard-avatar{width:42px;height:42px;border-radius:10px;display:flex;align-items:center;justify-content:center;font-size:20px;flex-shrink:0}
+    .hcard-avatar.online{background:#dcfce7}.hcard-avatar.offline{background:#fee2e2}.hcard-avatar.pending{background:#f1f5f9}.hcard-avatar.timeout{background:#fef9c3}
+    .hcard-name{font-size:14px;font-weight:700;color:#1e293b}
+    .hcard-url{font-size:11px;color:#94a3b8;font-family:'JetBrains Mono',monospace;word-break:break-all}
+    .sbadge{display:inline-flex;align-items:center;gap:4px;padding:3px 9px;border-radius:16px;font-size:10px;font-weight:600}
+    .sbadge.online{background:#dcfce7;color:#15803d}.sbadge.offline{background:#fee2e2;color:#b91c1c}.sbadge.pending{background:#f1f5f9;color:#64748b}.sbadge.timeout{background:#fef9c3;color:#a16207}
+    .hcard-data{padding:0 18px 14px;display:grid;grid-template-columns:repeat(3,1fr);gap:8px}
+    .hcard-di{background:#f8fafc;border-radius:8px;padding:10px;text-align:center}
+    .hcard-di .dv{font-size:18px;font-weight:800;color:#0f172a}.hcard-di .dl{font-size:10px;color:#64748b;font-weight:600;text-transform:uppercase}
+    .hcard-actions{padding:10px 18px;border-top:1px solid #f1f5f9;display:flex;gap:6px;justify-content:flex-end}
+    .hcard-actions button{padding:5px 10px;border-radius:6px;font-size:11px;font-weight:600;cursor:pointer;border:1px solid #e2e8f0;background:#fff;color:#475569}
+    .hcard-actions button:hover{background:#f1f5f9}
+    .hcard-actions .dbtn{color:#b91c1c;border-color:#fecaca}
+    .hcard-actions .dbtn:hover{background:#fee2e2}
+    .progress-wrap{width:100%;height:5px;background:#e2e8f0;border-radius:3px;margin:10px 0;overflow:hidden;display:none}
+    .progress-wrap.on{display:block}
+    .progress-fill{height:100%;background:linear-gradient(90deg,#2563eb,#0d9488);border-radius:3px;transition:width .3s;width:0%}
+    @media(max-width:768px){.hub-add-form{grid-template-columns:1fr}.hub-grid{grid-template-columns:1fr}.hub-search{width:100%}}
+  </style>
 </head>
 <body>
+
+  <!-- ═══ LOGIN MODAL ═══ -->
+  <div class="modal-overlay" id="login-modal">
+    <div class="modal-box">
+      <div class="icon">🔐</div>
+      <h3>Admin Login</h3>
+      <p>Enter password to access the Admin Panel & Central Hub</p>
+      <input type="password" id="login-password" placeholder="Enter admin password" autocomplete="off" />
+      <div class="error-msg" id="login-error"></div>
+      <div class="modal-btns">
+        <button class="btn-cancel" id="login-cancel-btn">Cancel</button>
+        <button class="btn-login" id="login-submit-btn">🔓 Login</button>
+      </div>
+    </div>
+  </div>
 
   <!-- ═══ TOP HEADER BAR ═══ -->
   <header class="top-bar">
@@ -23,8 +93,9 @@
       </div>
       <div class="top-bar-actions">
         <div class="live-badge"><span class="dot"></span> <span class="last-updated-time">--:--:--</span></div>
+        <div class="admin-badge" id="admin-badge" title="Click to logout">✅ Admin</div>
         <button class="helpline-btn">📞 <span>1800-123-4567</span></button>
-        <button class="login-btn">🔒 Admin Login</button>
+        <button class="login-btn" id="admin-login-btn">🔒 Admin Login</button>
         <button class="mobile-toggle" id="mobile-toggle" aria-label="Menu">☰</button>
       </div>
     </div>
@@ -38,7 +109,8 @@
       <a class="nav-link" data-tab="reports">📋 Reports</a>
       <a class="nav-link" data-tab="api">⚙️ API Integration</a>
       <a class="nav-link" data-tab="contact">📞 Contact Us</a>
-      <a class="nav-link" href="hub.html" style="margin-left:auto;color:#0d9488;font-weight:700;">🌐 Central Hub →</a>
+      <!-- Admin-only tab (hidden until login) -->
+      <a class="nav-link admin-only-tab" data-tab="admin" style="display:none;margin-left:auto;color:#0d9488;font-weight:700;">🌐 Central Hub (Admin)</a>
     </div>
   </nav>
 
@@ -55,78 +127,22 @@
 
     <!-- ══ TAB: DASHBOARD ══ -->
     <section class="tab-panel active" id="panel-dashboard">
-      <!-- Stat Cards Row -->
       <div class="stat-cards">
-        <div class="stat-card">
-          <div class="stat-icon green">🏥</div>
-          <div class="stat-info">
-            <div class="stat-value" id="stat-total-beds">80</div>
-            <div class="stat-label">Total Beds in Hospital</div>
-          </div>
-        </div>
-        <div class="stat-card">
-          <div class="stat-icon purple">🛏️</div>
-          <div class="stat-info">
-            <div class="stat-value" id="stat-total-avail">80</div>
-            <div class="stat-label">Total Available Beds</div>
-          </div>
-        </div>
-        <div class="stat-card">
-          <div class="stat-icon pink">🚨</div>
-          <div class="stat-info">
-            <div class="stat-value" id="stat-icu-avail">12</div>
-            <div class="stat-label">ICU Beds Available</div>
-          </div>
-        </div>
-        <div class="stat-card">
-          <div class="stat-icon blue">🚑</div>
-          <div class="stat-info">
-            <div class="stat-value" id="stat-emergency-avail">8</div>
-            <div class="stat-label">Emergency Beds Available</div>
-          </div>
-        </div>
+        <div class="stat-card"><div class="stat-icon green">🏥</div><div class="stat-info"><div class="stat-value" id="stat-total-beds">0</div><div class="stat-label">Total Beds in Hospital</div></div></div>
+        <div class="stat-card"><div class="stat-icon purple">🛏️</div><div class="stat-info"><div class="stat-value" id="stat-total-avail">0</div><div class="stat-label">Total Available Beds</div></div></div>
+        <div class="stat-card"><div class="stat-icon pink">🚨</div><div class="stat-info"><div class="stat-value" id="stat-icu-avail">0</div><div class="stat-label">ICU Beds Available</div></div></div>
+        <div class="stat-card"><div class="stat-icon blue">🚑</div><div class="stat-info"><div class="stat-value" id="stat-emergency-avail">0</div><div class="stat-label">Emergency Beds Available</div></div></div>
       </div>
-
-      <!-- Ward Wise Status -->
       <h3 class="section-title">Ward Wise Bed Status</h3>
-      <div class="card">
-        <div class="card-body" style="padding:0;">
-          <table class="data-table">
-            <thead>
-              <tr>
-                <th>Sr. No.</th>
-                <th>Ward Type</th>
-                <th>Total Beds</th>
-                <th>Available</th>
-                <th>Occupied</th>
-                <th>Occupancy Rate</th>
-                <th>Status</th>
-              </tr>
-            </thead>
-            <tbody id="ward-table-body">
-              <!-- Rendered by JS -->
-            </tbody>
-          </table>
-        </div>
-      </div>
-
-      <!-- Activity Feed -->
+      <div class="card"><div class="card-body" style="padding:0;"><table class="data-table"><thead><tr><th>Sr.</th><th>Ward Type</th><th>Total</th><th>Available</th><th>Occupied</th><th>Rate</th><th>Status</th></tr></thead><tbody id="ward-table-body"></tbody></table></div></div>
       <h3 class="section-title">Recent Activity</h3>
-      <div class="card">
-        <div class="card-body">
-          <div class="activity-list" id="activity-list">
-            <!-- Rendered by JS -->
-          </div>
-        </div>
-      </div>
+      <div class="card"><div class="card-body"><div class="activity-list" id="activity-list"></div></div></div>
     </section>
 
     <!-- ══ TAB: BED MANAGEMENT ══ -->
     <section class="tab-panel" id="panel-beds">
       <div class="updated-strip"><span class="dot"></span> Last updated: <span class="last-updated-time">--:--:--</span></div>
-      <div class="bed-grid" id="bed-grid">
-        <!-- Rendered by JS -->
-      </div>
+      <div class="bed-grid" id="bed-grid"></div>
     </section>
 
     <!-- ══ TAB: REPORTS ══ -->
@@ -138,155 +154,30 @@
           <button class="btn btn-primary" id="export-data-btn">📥 Export JSON</button>
         </div>
       </div>
-
-      <!-- Summary Table -->
-      <div class="card">
-        <div class="card-header"><div class="card-title">📊 Bed Summary</div></div>
-        <div class="card-body" style="padding:0;">
-          <table class="data-table">
-            <thead><tr><th>Ward</th><th>Total</th><th>Available</th><th>Occupied</th><th>Occupancy %</th></tr></thead>
-            <tbody id="report-table-body"></tbody>
-          </table>
-        </div>
-      </div>
-
-      <!-- JSON Preview -->
-      <div class="card">
-        <div class="card-header"><div class="card-title">{ } Live JSON Data</div></div>
-        <div class="card-body" style="padding:0;">
-          <div class="json-preview">
-            <button class="copy-btn" id="copy-json-btn-2">📋 Copy</button>
-            <pre id="json-output">Loading...</pre>
-          </div>
-        </div>
-      </div>
+      <div class="card"><div class="card-header"><div class="card-title">📊 Bed Summary</div></div><div class="card-body" style="padding:0;"><table class="data-table"><thead><tr><th>Ward</th><th>Total</th><th>Available</th><th>Occupied</th><th>Occupancy %</th></tr></thead><tbody id="report-table-body"></tbody></table></div></div>
+      <div class="card"><div class="card-header"><div class="card-title">{ } Live JSON Data</div></div><div class="card-body" style="padding:0;"><div class="json-preview"><button class="copy-btn" id="copy-json-btn-2">📋 Copy</button><pre id="json-output">Loading...</pre></div></div></div>
     </section>
 
     <!-- ══ TAB: API INTEGRATION ══ -->
     <section class="tab-panel" id="panel-api">
-
-      <!-- ── SHARE YOUR API (TOP - most important) ── -->
-      <div class="card" style="margin-bottom:28px;border:2px solid #bfdbfe;background:linear-gradient(135deg,#eff6ff 0%,#ffffff 100%);">
-        <div class="card-header" style="background:linear-gradient(90deg,#1e3a8a,#0ea5e9);border-radius:14px 14px 0 0;">
-          <div class="card-title" style="color:#fff;font-size:16px;">🔑 Your Hospital API Credentials — Share With Other Websites</div>
-        </div>
-        <div class="card-body">
-          <p style="font-size:13px;color:var(--gray-600);margin-bottom:20px;">
-            Copy the <strong>API URL</strong> and <strong>API Key</strong> below and paste them into the other website's
-            <em>API Integration</em> page to connect it to this hospital's live bed data.
-          </p>
-
-          <div style="display:grid;grid-template-columns:1fr 1fr;gap:20px;margin-bottom:24px;">
-            <!-- API URL -->
-            <div>
-              <label class="counter-label" style="margin-bottom:8px;display:block;color:#1e3a8a;font-weight:700;">📡 API URL (Base URL)</label>
-              <div style="display:flex;gap:8px;">
-                <input type="text" id="my-api-url" class="filter-input mono" readonly
-                  style="background:#f0f7ff;color:#1e3a8a;font-size:12px;font-weight:600;"
-                  value="https://hospital-data-green.vercel.app" />
-                <button class="btn btn-primary" style="white-space:nowrap;padding:8px 14px;font-size:12px;"
-                  id="copy-url-btn">📋 Copy</button>
-              </div>
-              <div style="font-size:11px;color:var(--gray-400);margin-top:5px;">Paste this as "API Base URL" in the other website</div>
-            </div>
-
-            <!-- API Key -->
-            <div>
-              <label class="counter-label" style="margin-bottom:8px;display:block;color:#1e3a8a;font-weight:700;">🔐 API Key</label>
-              <div style="display:flex;gap:8px;">
-                <input type="text" id="my-api-key" class="filter-input mono" readonly
-                  style="background:#f0f7ff;color:#1e3a8a;font-size:12px;font-weight:600;"
-                  value="HOSP-MUM-2026-CITYCARE-9X4K" />
-                <button class="btn btn-primary" style="white-space:nowrap;padding:8px 14px;font-size:12px;"
-                  id="copy-key-btn">📋 Copy</button>
-              </div>
-              <div style="font-size:11px;color:var(--gray-400);margin-top:5px;">Paste this as "API Key" in the other website</div>
-            </div>
-          </div>
-
-          <!-- Step-by-step guide -->
-          <div style="background:#fff;border:1px solid #bfdbfe;border-radius:10px;padding:16px;">
-            <div style="font-size:13px;font-weight:700;color:#1e3a8a;margin-bottom:12px;">⚡ Steps to connect another website to this hospital:</div>
-            <div style="display:flex;flex-direction:column;gap:10px;">
-              <div style="display:flex;align-items:flex-start;gap:12px;">
-                <div style="min-width:26px;height:26px;border-radius:50%;background:#0ea5e9;color:#fff;display:flex;align-items:center;justify-content:center;font-size:12px;font-weight:700;flex-shrink:0;">1</div>
-                <div style="font-size:13px;color:var(--gray-600);">On the other website, open the <strong>API Integration</strong> tab</div>
-              </div>
-              <div style="display:flex;align-items:flex-start;gap:12px;">
-                <div style="min-width:26px;height:26px;border-radius:50%;background:#0ea5e9;color:#fff;display:flex;align-items:center;justify-content:center;font-size:12px;font-weight:700;flex-shrink:0;">2</div>
-                <div style="font-size:13px;color:var(--gray-600);">Paste the <strong>API URL</strong> above into its "API Base URL" field</div>
-              </div>
-              <div style="display:flex;align-items:flex-start;gap:12px;">
-                <div style="min-width:26px;height:26px;border-radius:50%;background:#0ea5e9;color:#fff;display:flex;align-items:center;justify-content:center;font-size:12px;font-weight:700;flex-shrink:0;">3</div>
-                <div style="font-size:13px;color:var(--gray-600);">Paste the <strong>API Key</strong> above into its "API Key" field</div>
-              </div>
-              <div style="display:flex;align-items:flex-start;gap:12px;">
-                <div style="min-width:26px;height:26px;border-radius:50%;background:#22c55e;color:#fff;display:flex;align-items:center;justify-content:center;font-size:12px;font-weight:700;flex-shrink:0;">4</div>
-                <div style="font-size:13px;color:var(--gray-600);">Click <strong>"Connect API"</strong> on that site — it will now sync live bed data from this hospital ✅</div>
-              </div>
-            </div>
-          </div>
-        </div>
-      </div>
-
-      <!-- ── CONNECT TO ANOTHER SYSTEM + STATUS + ENDPOINTS ── -->
       <div class="two-col">
-        <!-- API Configuration (connect this dashboard to a central system) -->
         <div class="card">
-          <div class="card-header"><div class="card-title">🔗 Connect to Another System</div></div>
+          <div class="card-header"><div class="card-title">🔗 API Configuration</div></div>
           <div class="card-body">
-            <div style="margin-bottom:16px;">
-              <label class="counter-label" style="margin-bottom:6px;display:block;">API Base URL</label>
-              <input type="url" class="filter-input mono" id="api-url" placeholder="https://your-central-system.vercel.app" />
-              <div style="font-size:11px;color:var(--gray-400);margin-top:4px;">URL of the central tracking system that collects data from all hospitals</div>
-            </div>
-            <div style="margin-bottom:16px;">
-              <label class="counter-label" style="margin-bottom:6px;display:block;">API Key</label>
-              <input type="password" class="filter-input mono" id="api-key" placeholder="Enter API key from the central system" />
-            </div>
-            <div style="display:flex;gap:10px;">
-              <button class="btn btn-primary" id="connect-api-btn">🔗 Connect API</button>
-              <button class="btn btn-outline" id="disconnect-api-btn">Disconnect</button>
-            </div>
+            <div style="margin-bottom:16px;"><label class="counter-label" style="margin-bottom:6px;display:block;">API Base URL</label><input type="url" class="filter-input mono" id="api-url" placeholder="https://your-central-system.vercel.app" /><div style="font-size:11px;color:var(--gray-400);margin-top:4px;">URL of another hospital or central tracking system</div></div>
+            <div style="margin-bottom:16px;"><label class="counter-label" style="margin-bottom:6px;display:block;">API Key</label><input type="password" class="filter-input mono" id="api-key" placeholder="Enter API key" /></div>
+            <div style="display:flex;gap:10px;"><button class="btn btn-primary" id="connect-api-btn">🔗 Connect API</button><button class="btn btn-outline" id="disconnect-api-btn">Disconnect</button></div>
             <hr style="margin:20px 0;border:none;border-top:1px solid var(--gray-100);" />
-            <div class="toggle-row">
-              <div><div class="toggle-label">Auto-Sync (Polling)</div><div class="toggle-desc">Fetch updates every 30 seconds</div></div>
-              <label class="toggle-switch"><input type="checkbox" id="polling-toggle" checked /><span class="toggle-slider"></span></label>
-            </div>
-            <div class="toggle-row">
-              <div><div class="toggle-label">WebSocket Real-time</div><div class="toggle-desc">Requires backend support</div></div>
-              <label class="toggle-switch"><input type="checkbox" id="ws-toggle" disabled /><span class="toggle-slider"></span></label>
-            </div>
+            <div class="toggle-row"><div><div class="toggle-label">Auto-Sync (Polling)</div><div class="toggle-desc">Fetch updates every 30 seconds</div></div><label class="toggle-switch"><input type="checkbox" id="polling-toggle" checked /><span class="toggle-slider"></span></label></div>
           </div>
         </div>
-
-        <!-- Status + Endpoints -->
         <div>
-          <div class="card" style="margin-bottom:24px;">
-            <div class="card-header"><div class="card-title">📡 Connection Status</div></div>
-            <div class="card-body" id="api-status-area" style="text-align:center;padding:30px;">
-              <div style="font-size:40px;margin-bottom:10px;">🔌</div>
-              <div style="font-size:14px;font-weight:600;color:var(--gray-700);">Not Connected</div>
-              <div style="font-size:12px;color:var(--gray-500);margin-top:4px;">Configure settings above to sync with a central system</div>
-            </div>
-          </div>
-          <div class="card">
-            <div class="card-header"><div class="card-title">📖 This Hospital's API Endpoints</div></div>
-            <div class="card-body">
-              <div class="api-endpoint">
-                <span class="method-badge get">GET</span>
-                <div><div class="api-path">/api/beds</div><div class="api-desc">Fetch current bed availability data</div></div>
-              </div>
-              <div class="api-endpoint">
-                <span class="method-badge post">POST</span>
-                <div><div class="api-path">/api/update-beds</div><div class="api-desc">Update bed counts for a specific ward</div></div>
-              </div>
-              <div class="api-endpoint">
-                <span class="method-badge get">GET</span>
-                <div><div class="api-path">/api/health</div><div class="api-desc">Check API status and list endpoints</div></div>
-              </div>
-            </div>
-          </div>
+          <div class="card" style="margin-bottom:24px;"><div class="card-header"><div class="card-title">📡 Connection Status</div></div><div class="card-body" id="api-status-area" style="text-align:center;padding:30px;"><div style="font-size:40px;margin-bottom:10px;">🔌</div><div style="font-size:14px;font-weight:600;color:var(--gray-700);">Not Connected</div><div style="font-size:12px;color:var(--gray-500);margin-top:4px;">Configure settings to sync</div></div></div>
+          <div class="card"><div class="card-header"><div class="card-title">📖 API Endpoints</div></div><div class="card-body">
+            <div class="api-endpoint"><span class="method-badge get">GET</span><div><div class="api-path">/api/beds</div><div class="api-desc">Fetch bed availability</div></div></div>
+            <div class="api-endpoint"><span class="method-badge post">POST</span><div><div class="api-path">/api/update-beds</div><div class="api-desc">Update bed counts</div></div></div>
+            <div class="api-endpoint"><span class="method-badge get">GET</span><div><div class="api-path">/api/health</div><div class="api-desc">Health check</div></div></div>
+          </div></div>
         </div>
       </div>
     </section>
@@ -294,28 +185,65 @@
     <!-- ══ TAB: CONTACT ══ -->
     <section class="tab-panel" id="panel-contact">
       <div class="two-col">
-        <div class="card">
-          <div class="card-header"><div class="card-title">🏥 Hospital Information</div></div>
-          <div class="card-body">
-            <table class="data-table">
-              <tbody>
-                <tr><td style="font-weight:600;width:180px;">Hospital Name</td><td id="info-name">Mumbai City Care Hospital</td></tr>
-                <tr><td style="font-weight:600;">Location</td><td id="info-location">Mumbai, Maharashtra, India</td></tr>
-                <tr><td style="font-weight:600;">Type</td><td id="info-type">Multi-Speciality Hospital</td></tr>
-                <tr><td style="font-weight:600;">Registration No.</td><td id="info-reg">MH-MUM-2005-0847</td></tr>
-                <tr><td style="font-weight:600;">Helpline</td><td>📞 1800-123-4567 (Toll Free)</td></tr>
-                <tr><td style="font-weight:600;">Email</td><td>📧 info@mumbaicitycare.gov.in</td></tr>
-                <tr><td style="font-weight:600;">Emergency</td><td>🚑 112 / 108</td></tr>
-              </tbody>
-            </table>
+        <div class="card"><div class="card-header"><div class="card-title">🏥 Hospital Information</div></div><div class="card-body"><table class="data-table"><tbody>
+          <tr><td style="font-weight:600;width:180px;">Hospital Name</td><td id="info-name">Mumbai City Care Hospital</td></tr>
+          <tr><td style="font-weight:600;">Location</td><td id="info-location">Mumbai, Maharashtra, India</td></tr>
+          <tr><td style="font-weight:600;">Type</td><td id="info-type">Multi-Speciality Hospital</td></tr>
+          <tr><td style="font-weight:600;">Registration No.</td><td id="info-reg">MH-MUM-2005-0847</td></tr>
+          <tr><td style="font-weight:600;">Helpline</td><td>📞 1800-123-4567 (Toll Free)</td></tr>
+          <tr><td style="font-weight:600;">Email</td><td>📧 info@mumbaicitycare.gov.in</td></tr>
+          <tr><td style="font-weight:600;">Emergency</td><td>🚑 112 / 108</td></tr>
+        </tbody></table></div></div>
+        <div class="card"><div class="card-header"><div class="card-title">📍 Location</div></div><div class="card-body" style="padding:0;"><iframe src="https://www.google.com/maps/embed?pb=!1m18!1m12!1m3!1d241317.11609823277!2d72.74109995709657!3d19.08219783958161!2m3!1f0!2f0!3f0!3m2!1i1024!2i768!4f13.1!3m3!1m2!1s0x3be7c6306644edc1%3A0x5da4ed8f8d648c69!2sMumbai%2C%20Maharashtra!5e0!3m2!1sen!2sin!4v1714315200000" width="100%" height="320" style="border:0;border-radius:0 0 14px 14px;" allowfullscreen loading="lazy"></iframe></div></div>
+      </div>
+    </section>
+
+    <!-- ══ TAB: ADMIN / CENTRAL HUB (Password Protected) ══ -->
+    <section class="tab-panel" id="panel-admin">
+      <!-- Aggregate Stats -->
+      <div class="hub-stats-row">
+        <div class="hub-stat-item"><div class="hv" id="hub-hospitals">0</div><div class="hl">Connected Hospitals</div></div>
+        <div class="hub-stat-item"><div class="hv" id="hub-online">0</div><div class="hl">Online Now</div></div>
+        <div class="hub-stat-item"><div class="hv" id="hub-beds">0</div><div class="hl">Total Beds</div></div>
+        <div class="hub-stat-item"><div class="hv" id="hub-avail">0</div><div class="hl">Available Beds</div></div>
+        <div class="hub-stat-item"><div class="hv" id="hub-icu">0</div><div class="hl">ICU Available</div></div>
+      </div>
+
+      <!-- Add Connection Form -->
+      <div class="card" style="margin-bottom:24px;">
+        <div class="card-header"><div class="card-title">➕ Add Hospital Connection</div></div>
+        <div class="card-body">
+          <div class="hub-add-form">
+            <div class="field"><label>Hospital Name</label><input type="text" id="hub-add-name" placeholder="e.g. City Hospital Pune" /></div>
+            <div class="field"><label>API URL (Vercel / deployed URL)</label><input type="url" id="hub-add-url" placeholder="https://hospital-name.vercel.app" style="font-family:'JetBrains Mono',monospace;font-size:12px;" /></div>
+            <div class="field"><label>API Key (optional)</label><input type="password" id="hub-add-key" placeholder="API key" /></div>
+            <div><button class="btn btn-primary" id="hub-add-btn" style="height:42px;">➕ Add</button></div>
           </div>
         </div>
-        <div class="card">
-          <div class="card-header"><div class="card-title">📍 Location</div></div>
-          <div class="card-body" style="padding:0;">
-            <iframe src="https://www.google.com/maps/embed?pb=!1m18!1m12!1m3!1d241317.11609823277!2d72.74109995709657!3d19.08219783958161!2m3!1f0!2f0!3f0!3m2!1i1024!2i768!4f13.1!3m3!1m2!1s0x3be7c6306644edc1%3A0x5da4ed8f8d648c69!2sMumbai%2C%20Maharashtra!5e0!3m2!1sen!2sin!4v1714315200000" width="100%" height="320" style="border:0;border-radius:0 0 14px 14px;" allowfullscreen loading="lazy"></iframe>
-          </div>
+      </div>
+
+      <!-- Toolbar -->
+      <div class="hub-toolbar">
+        <div style="display:flex;align-items:center;gap:10px;"><h3 class="section-title" style="margin:0;">Connected Hospitals</h3><span style="background:#dbeafe;color:#1d4ed8;font-size:11px;font-weight:700;padding:2px 8px;border-radius:10px;" id="hub-count">0</span></div>
+        <div style="display:flex;align-items:center;gap:8px;">
+          <input type="text" class="hub-search" id="hub-search" placeholder="Search hospitals..." />
+          <button class="btn btn-primary btn-sm" id="hub-fetch-all">🔄 Fetch All</button>
+          <button class="btn btn-outline btn-sm" id="hub-export">📥 Export</button>
+          <button class="btn btn-danger btn-sm" id="hub-clear">🗑️ Clear All</button>
         </div>
+      </div>
+
+      <!-- Progress -->
+      <div class="progress-wrap" id="hub-progress"><div class="progress-fill" id="hub-progress-fill"></div></div>
+
+      <!-- Hospital Cards Grid -->
+      <div class="hub-grid" id="hub-grid"></div>
+
+      <!-- Empty State -->
+      <div id="hub-empty" style="text-align:center;padding:50px 20px;color:#94a3b8;display:none;">
+        <div style="font-size:48px;margin-bottom:14px;">🌐</div>
+        <h3 style="font-size:18px;color:#475569;margin-bottom:6px;">No hospitals connected yet</h3>
+        <p>Add your first hospital API above to get started.</p>
       </div>
     </section>
 
@@ -324,7 +252,7 @@
   <!-- ═══ FOOTER ═══ -->
   <footer class="site-footer">
     <div><strong>Mumbai City Care Hospital</strong> — Government of Maharashtra</div>
-    <div style="margin-top:4px;">© 2026 All Rights Reserved | Designed for Hospital Bed Tracking System</div>
+    <div style="margin-top:4px;">© 2026 All Rights Reserved | Hospital Bed Tracking System</div>
   </footer>
 
   <!-- Toast Container -->
@@ -333,6 +261,7 @@
   <!-- Scripts -->
   <script src="js/config.js"></script>
   <script src="js/api.js"></script>
+  <script src="js/hub.js"></script>
   <script src="js/app.js"></script>
 </body>
 </html>

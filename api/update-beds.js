@@ -17,9 +17,9 @@
  * }
  */
 
-const { getData, updateBed } = require("./data");
+const { fetchDbData, saveDbData } = require("./db");
 
-module.exports = (req, res) => {
+module.exports = async (req, res) => {
   // Handle CORS preflight
   if (req.method === "OPTIONS") {
     res.setHeader("Access-Control-Allow-Origin", "*");
@@ -61,16 +61,42 @@ module.exports = (req, res) => {
     });
   }
 
-  const updated = updateBed(bed_type, field, value);
-
-  if (!updated) {
-    return res.status(500).json({ success: false, error: "Failed to update bed data." });
+  // Get current DB data
+  const hospitalData = await fetchDbData();
+  
+  if (!hospitalData || !hospitalData.beds[bed_type]) {
+    return res.status(500).json({ success: false, error: "Failed to load database state." });
   }
+
+  // Update
+  const numVal = Math.max(0, parseInt(value) || 0);
+  hospitalData.beds[bed_type][field] = numVal;
+
+  if (hospitalData.beds[bed_type].available > hospitalData.beds[bed_type].total) {
+    hospitalData.beds[bed_type].available = hospitalData.beds[bed_type].total;
+  }
+
+  hospitalData.last_updated = new Date().toISOString();
+
+  // Save back to DB
+  const saved = await saveDbData(hospitalData);
+
+  if (!saved) {
+    return res.status(500).json({ success: false, error: "Failed to save bed data to database." });
+  }
+
+  // Format return data
+  const returnData = {
+    ...hospitalData,
+    beds: JSON.parse(JSON.stringify(hospitalData.beds)),
+    total_beds: Object.values(hospitalData.beds).reduce((s, b) => s + b.total, 0),
+    total_available: Object.values(hospitalData.beds).reduce((s, b) => s + b.available, 0),
+  };
 
   return res.status(200).json({
     success: true,
     message: `${bed_type.toUpperCase()} ${field} updated to ${parseInt(value)}`,
-    data: getData(),
+    data: returnData,
     timestamp: new Date().toISOString(),
   });
 };

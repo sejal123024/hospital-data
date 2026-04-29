@@ -16,9 +16,9 @@
  * }
  */
 
-const { getData } = require("./data");
+const { fetchDbData } = require("./db");
 
-module.exports = (req, res) => {
+module.exports = async (req, res) => {
   // Handle CORS preflight
   if (req.method === "OPTIONS") {
     res.setHeader("Access-Control-Allow-Origin", "*");
@@ -34,7 +34,15 @@ module.exports = (req, res) => {
   res.setHeader("Access-Control-Allow-Origin", "*");
   res.setHeader("Cache-Control", "no-cache, no-store, must-revalidate");
 
-  const data = getData();
+  const hospitalData = await fetchDbData();
+  
+  // Format response data
+  const data = {
+    ...hospitalData,
+    beds: JSON.parse(JSON.stringify(hospitalData.beds)),
+    total_beds: Object.values(hospitalData.beds).reduce((s, b) => s + b.total, 0),
+    total_available: Object.values(hospitalData.beds).reduce((s, b) => s + b.available, 0),
+  };
 
   return res.status(200).json({
     success: true,
