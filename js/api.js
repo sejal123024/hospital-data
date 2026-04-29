@@ -10,34 +10,96 @@ const HospitalAPI = (() => {
   // ── Private state ──
   let _pollingTimer = null;
 
+  // ── Firestore Configuration (Direct Fallback) ──
+  const PROJECT_ID = "hospital-bloodbank-management";
+  const API_KEY = "AIzaSyC2nfAI1v5UjKps405pa8CAM42l2qUG_5I";
+  const DOC_URL = `https://firestore.googleapis.com/v1/projects/${PROJECT_ID}/databases/(default)/documents/hospitals/MUM-CITY-CARE-001?key=${API_KEY}`;
+
+  /**
+   * Helper to map normal JSON to Firestore Flattened format
+   */
+  function toFirestoreFormat(data) {
+    const fields = {
+      hospital: { stringValue: data.hospital || HospitalConfig.name },
+      location: { stringValue: HospitalConfig.location },
+      type: { stringValue: HospitalConfig.type },
+      registration: { stringValue: HospitalConfig.registrationNo },
+      last_updated: { stringValue: new Date().toISOString() }
+    };
+    
+    for (const [key, val] of Object.entries(data.beds || AppState.beds)) {
+      fields[`${key}_total`] = { integerValue: (val.total || 0).toString() };
+      fields[`${key}_available`] = { integerValue: (val.available || 0).toString() };
+    }
+    return { fields };
+  }
+
+  /**
+   * Helper to map Firestore Flattened format back to normal JSON
+   */
+  function fromFirestoreFormat(doc) {
+    if (!doc || !doc.fields) return null;
+    const f = doc.fields;
+    const beds = {};
+    const types = ["icu", "general", "emergency", "pediatric", "oxygen", "ventilator"];
+    
+    types.forEach(t => {
+      beds[t] = {
+        total: parseInt(f[`${t}_total`]?.integerValue || 0),
+        available: parseInt(f[`${t}_available`]?.integerValue || 0)
+      };
+    });
+
+    return {
+      hospital: f.hospital?.stringValue,
+      last_updated: f.last_updated?.stringValue,
+      beds: beds
+    };
+  }
+
   /**
    * GET /api/beds
-   * Fetches current bed availability from the backend.
    */
   async function getBeds() {
     try {
-      // Add timestamp to bypass potential browser/Vercel caching
-      const response = await fetch(`/api/beds?t=${Date.now()}`);
+      let response = await fetch(`/api/beds?t=${Date.now()}`);
+      
+      // If 404, we are likely running locally without a Vercel server
+      if (response.status === 404) {
+        console.info("[API] Relative backend not found, falling back to direct Firestore...");
+        response = await fetch(DOC_URL);
+        if (!response.ok) throw new Error("Firestore fallback failed");
+        const doc = await response.json();
+        const result = fromFirestoreFormat(doc);
+        if (result) {
+          syncLocalState(result);
+          return { success: true, data: result, source: "firestore-direct" };
+        }
+      }
+
       if (!response.ok) throw new Error(`HTTP ${response.status}`);
       const result = await response.json();
-      
-      if (result.success && result.data && result.data.beds) {
-        // Sync local state
-        for (const [type, vals] of Object.entries(result.data.beds)) {
-          if (AppState.beds[type]) {
-            AppState.beds[type].total = vals.total;
-            AppState.beds[type].available = vals.available;
-          }
-        }
-        AppState.lastUpdated = result.data.last_updated || new Date().toISOString();
-        EventBus.emit("beds:updated", AppState.beds);
-        EventBus.emit("timestamp:updated", AppState.lastUpdated);
+      if (result.success && result.data) {
+        syncLocalState(result.data);
       }
       return { success: true, data: result.data };
     } catch (error) {
-      console.warn("[API] GET /api/beds failed (falling back to local state):", error.message);
+      console.warn("[API] GET failed:", error.message);
       return { success: true, data: AppState.toJSON(), source: "local" };
     }
+  }
+
+  function syncLocalState(data) {
+    if (!data.beds) return;
+    for (const [type, vals] of Object.entries(data.beds)) {
+      if (AppState.beds[type]) {
+        AppState.beds[type].total = vals.total;
+        AppState.beds[type].available = vals.available;
+      }
+    }
+    AppState.lastUpdated = data.last_updated || new Date().toISOString();
+    EventBus.emit("beds:updated", AppState.beds);
+    EventBus.emit("timestamp:updated", AppState.lastUpdated);
   }
 
   /**
@@ -48,80 +110,51 @@ const HospitalAPI = (() => {
       const payload = {
         hospital: HospitalConfig.name,
         beds: AppState.beds,
-        force_sync: true,
-        timestamp: new Date().toISOString()
+        sync_all: true
       };
 
-      const response = await fetch(`/api/update-beds`, {
+      let response = await fetch(`/api/update-beds`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ ...payload, sync_all: true })
+        body: JSON.stringify(payload)
       });
+
+      if (response.status === 404) {
+        // Direct Firestore fallback
+        const updateMask = Object.keys(toFirestoreFormat(payload).fields).map(f => `updateMask.fieldPaths=${f}`).join("&");
+        response = await fetch(`${DOC_URL}&${updateMask}`, {
+          method: "PATCH",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(toFirestoreFormat(payload))
+        });
+      }
 
       if (!response.ok) throw new Error(`HTTP ${response.status}`);
       const result = await response.json();
       return { success: true, data: result };
     } catch (error) {
-      console.error("[API] Manual Sync Failed:", error.message);
+      console.error("[API] Sync Failed:", error.message);
       return { success: false, error: error.message };
     }
   }
 
   /**
    * POST /api/update-beds
-   * Sends updated bed counts to the backend.
    */
   async function updateBeds(bedType, field, value) {
-    const payload = {
-      hospital: HospitalConfig.name,
-      bed_type: bedType,
-      field: field,
-      value: value,
-      timestamp: new Date().toISOString(),
-    };
-
-    // Always update local AppState immediately so UI reflects change instantly
+    // Optimistic UI update
     if (AppState.beds[bedType]) {
       AppState.beds[bedType][field] = Math.max(0, parseInt(value) || 0);
-
       if (AppState.beds[bedType].available > AppState.beds[bedType].total) {
         AppState.beds[bedType].available = AppState.beds[bedType].total;
       }
-
       AppState.lastUpdated = new Date().toISOString();
       EventBus.emit("beds:updated", AppState.beds);
       EventBus.emit("timestamp:updated", AppState.lastUpdated);
     }
 
-    // Persist to backend
-    try {
-      const response = await fetch(`/api/update-beds`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(payload),
-      });
-
-      if (!response.ok) throw new Error(`HTTP ${response.status}`);
-      const result = await response.json();
-
-      // If the server returns updated beds data, sync AppState to ensure consistency
-      if (result.success && result.data && result.data.beds) {
-        for (const [type, vals] of Object.entries(result.data.beds)) {
-          if (AppState.beds[type]) {
-            AppState.beds[type].total = vals.total;
-            AppState.beds[type].available = vals.available;
-          }
-        }
-        AppState.lastUpdated = result.data.last_updated || new Date().toISOString();
-        EventBus.emit("beds:updated", AppState.beds);
-        EventBus.emit("timestamp:updated", AppState.lastUpdated);
-      }
-
-      return { success: true, data: result };
-    } catch (error) {
-      console.warn("[API] POST /api/update-beds failed:", error.message);
-      return { success: false, error: error.message };
-    }
+    // Trigger full sync to keep it simple and robust
+    return await syncWithCloud();
   }
 
   /**
