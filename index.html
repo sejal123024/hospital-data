@@ -92,7 +92,7 @@
         </div>
       </div>
       <div class="top-bar-actions">
-        <div class="live-badge"><span class="dot"></span> <span class="last-updated-time">--:--:--</span></div>
+        <div class="live-badge" id="btn-force-refresh" title="Force Refresh from Cloud" style="cursor:pointer;"><span class="dot"></span> <span class="last-updated-time">--:--:--</span> 🔄</div>
         <div class="admin-badge" id="admin-badge" title="Click to logout">✅ Admin</div>
         <button class="helpline-btn">📞 <span>1800-123-4567</span></button>
         <button class="login-btn" id="admin-login-btn">🔒 Admin Login</button>
@@ -141,6 +141,10 @@
 
     <!-- ══ TAB: BED MANAGEMENT ══ -->
     <section class="tab-panel" id="panel-beds">
+      <div class="section-header" style="display:flex;justify-content:space-between;align-items:center;margin-bottom:15px;">
+        <h3 class="section-title" style="margin:0;">Real-time Bed Inventory</h3>
+        <button class="btn btn-primary" id="btn-manual-sync" style="background:linear-gradient(90deg,#059669,#10b981);box-shadow:0 4px 12px rgba(16,185,129,0.3);">💾 Save Changes to Cloud</button>
+      </div>
       <div class="updated-strip"><span class="dot"></span> Last updated: <span class="last-updated-time">--:--:--</span></div>
       <div class="bed-grid" id="bed-grid"></div>
     </section>

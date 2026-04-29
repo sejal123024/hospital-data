@@ -16,7 +16,8 @@ const HospitalAPI = (() => {
    */
   async function getBeds() {
     try {
-      const response = await fetch(`/api/beds`);
+      // Add timestamp to bypass potential browser/Vercel caching
+      const response = await fetch(`/api/beds?t=${Date.now()}`);
       if (!response.ok) throw new Error(`HTTP ${response.status}`);
       const result = await response.json();
       
@@ -36,6 +37,33 @@ const HospitalAPI = (() => {
     } catch (error) {
       console.warn("[API] GET /api/beds failed (falling back to local state):", error.message);
       return { success: true, data: AppState.toJSON(), source: "local" };
+    }
+  }
+
+  /**
+   * Manual sync to force current AppState to Firestore
+   */
+  async function syncWithCloud() {
+    try {
+      const payload = {
+        hospital: HospitalConfig.name,
+        beds: AppState.beds,
+        force_sync: true,
+        timestamp: new Date().toISOString()
+      };
+
+      const response = await fetch(`/api/update-beds`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ ...payload, sync_all: true })
+      });
+
+      if (!response.ok) throw new Error(`HTTP ${response.status}`);
+      const result = await response.json();
+      return { success: true, data: result };
+    } catch (error) {
+      console.error("[API] Manual Sync Failed:", error.message);
+      return { success: false, error: error.message };
     }
   }
 
@@ -228,6 +256,7 @@ const HospitalAPI = (() => {
     connectWebSocket,
     startPolling,
     stopPolling,
+    syncWithCloud,
     addNotification,
     exportData,
   };

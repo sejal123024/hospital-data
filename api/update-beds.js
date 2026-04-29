@@ -34,46 +34,54 @@ module.exports = async (req, res) => {
 
   res.setHeader("Access-Control-Allow-Origin", "*");
 
-  const { bed_type, field, value } = req.body || {};
-
-  // Validation
-  const validTypes = ["icu", "general", "emergency", "pediatric", "oxygen", "ventilator"];
-  const validFields = ["total", "available"];
-
-  if (!bed_type || !validTypes.includes(bed_type)) {
-    return res.status(400).json({
-      success: false,
-      error: `Invalid bed_type. Must be one of: ${validTypes.join(", ")}`,
-    });
-  }
-
-  if (!field || !validFields.includes(field)) {
-    return res.status(400).json({
-      success: false,
-      error: `Invalid field. Must be one of: ${validFields.join(", ")}`,
-    });
-  }
-
-  if (value === undefined || value === null || isNaN(parseInt(value))) {
-    return res.status(400).json({
-      success: false,
-      error: "Invalid value. Must be a number.",
-    });
-  }
+  const { bed_type, field, value, sync_all, beds: newBeds } = req.body || {};
 
   // Get current DB data
   const hospitalData = await fetchDbData();
   
-  if (!hospitalData || !hospitalData.beds[bed_type]) {
+  if (!hospitalData) {
     return res.status(500).json({ success: false, error: "Failed to load database state." });
   }
 
-  // Update
-  const numVal = Math.max(0, parseInt(value) || 0);
-  hospitalData.beds[bed_type][field] = numVal;
+  if (sync_all && newBeds) {
+    // Force sync the entire beds object (from manual "Save" button)
+    hospitalData.beds = newBeds;
+  } else {
+    // Standard individual update
+    const validTypes = ["icu", "general", "emergency", "pediatric", "oxygen", "ventilator"];
+    const validFields = ["total", "available"];
 
-  if (hospitalData.beds[bed_type].available > hospitalData.beds[bed_type].total) {
-    hospitalData.beds[bed_type].available = hospitalData.beds[bed_type].total;
+    if (!bed_type || !validTypes.includes(bed_type)) {
+      return res.status(400).json({
+        success: false,
+        error: `Invalid bed_type. Must be one of: ${validTypes.join(", ")}`,
+      });
+    }
+
+    if (!field || !validFields.includes(field)) {
+      return res.status(400).json({
+        success: false,
+        error: `Invalid field. Must be one of: ${validFields.join(", ")}`,
+      });
+    }
+
+    if (value === undefined || value === null || isNaN(parseInt(value))) {
+      return res.status(400).json({
+        success: false,
+        error: "Invalid value. Must be a number.",
+      });
+    }
+
+    if (!hospitalData.beds[bed_type]) {
+      hospitalData.beds[bed_type] = { total: 0, available: 0 };
+    }
+
+    const numVal = Math.max(0, parseInt(value) || 0);
+    hospitalData.beds[bed_type][field] = numVal;
+
+    if (hospitalData.beds[bed_type].available > hospitalData.beds[bed_type].total) {
+      hospitalData.beds[bed_type].available = hospitalData.beds[bed_type].total;
+    }
   }
 
   hospitalData.last_updated = new Date().toISOString();
@@ -82,20 +90,19 @@ module.exports = async (req, res) => {
   const saved = await saveDbData(hospitalData);
 
   if (!saved) {
-    return res.status(500).json({ success: false, error: "Failed to save bed data to database." });
+    return res.status(500).json({ success: false, error: "Failed to save data to Firestore." });
   }
 
   // Format return data
   const returnData = {
     ...hospitalData,
-    beds: JSON.parse(JSON.stringify(hospitalData.beds)),
-    total_beds: Object.values(hospitalData.beds).reduce((s, b) => s + b.total, 0),
-    total_available: Object.values(hospitalData.beds).reduce((s, b) => s + b.available, 0),
+    total_beds: Object.values(hospitalData.beds).reduce((s, b) => s + (b.total || 0), 0),
+    total_available: Object.values(hospitalData.beds).reduce((s, b) => s + (b.available || 0), 0),
   };
 
   return res.status(200).json({
     success: true,
-    message: `${bed_type.toUpperCase()} ${field} updated to ${parseInt(value)}`,
+    message: sync_all ? "Cloud sync successful" : `${bed_type.toUpperCase()} ${field} updated`,
     data: returnData,
     timestamp: new Date().toISOString(),
   });

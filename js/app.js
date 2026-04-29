@@ -32,6 +32,7 @@ const App = (() => {
     bindMobileMenu();
     bindAdminLogin();
     bindHubControls();
+    bindManualSync();
     updateTimestamp();
     startSimulation();
 
@@ -331,6 +332,31 @@ const App = (() => {
   function syntaxHL(json) {
     return json.replace(/("(\\u[a-zA-Z0-9]{4}|\\[^u]|[^\\"])*"(\s*:)?|\b(true|false|null)\b|-?\d+(?:\.\d*)?(?:[eE][+\-]?\d+)?)/g,
       (m) => { let c = "json-number"; if (/^"/.test(m)) c = /:$/.test(m) ? "json-key" : "json-string"; return `<span class="${c}">${m}</span>`; });
+  }
+
+  function bindManualSync() {
+    const syncBtn = $("#btn-manual-sync");
+    const refreshBtn = $("#btn-force-refresh");
+
+    syncBtn?.addEventListener("click", async () => {
+      syncBtn.disabled = true;
+      syncBtn.innerHTML = "⏳ Saving...";
+      const res = await HospitalAPI.syncWithCloud();
+      syncBtn.disabled = false;
+      syncBtn.innerHTML = "💾 Save Changes to Cloud";
+      
+      if (res.success) {
+        showToast("Changes persisted to Firestore ✅", "success");
+      } else {
+        showToast("Cloud sync failed. Check console.", "danger");
+      }
+    });
+
+    refreshBtn?.addEventListener("click", async () => {
+      showToast("Fetching latest data from Cloud...", "info");
+      await HospitalAPI.getBeds();
+      showToast("Dashboard updated!", "success");
+    });
   }
 
   // ═══════════════════════════════════
