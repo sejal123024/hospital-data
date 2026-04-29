@@ -13,31 +13,24 @@ let cachedData = null;
 function parseFirestore(doc) {
   if (!doc || !doc.fields) return null;
   try {
+    const f = doc.fields;
     const data = {
-      hospital: doc.fields.hospital?.stringValue || localData.hospital,
-      location: doc.fields.location?.stringValue || localData.location,
-      type: doc.fields.type?.stringValue || localData.type,
-      registration: doc.fields.registration?.stringValue || localData.registration,
-      last_updated: doc.fields.last_updated?.stringValue || new Date().toISOString(),
+      hospital: f.hospital?.stringValue || localData.hospital,
+      location: f.location?.stringValue || localData.location,
+      type: f.type?.stringValue || localData.type,
+      registration: f.registration?.stringValue || localData.registration,
+      last_updated: f.last_updated?.stringValue || new Date().toISOString(),
       beds: {}
     };
     
-    // Initialize with local defaults first in case fields are missing in Firestore
-    Object.keys(localData.beds).forEach(key => {
-      data.beds[key] = { ...localData.beds[key] };
+    const types = ["icu", "general", "emergency", "pediatric", "oxygen", "ventilator"];
+    types.forEach(t => {
+      data.beds[t] = {
+        total: parseInt(f[`${t}_total`]?.integerValue || localData.beds[t]?.total || 0),
+        available: parseInt(f[`${t}_available`]?.integerValue || localData.beds[t]?.available || 0)
+      };
     });
-
-    if (doc.fields.beds && doc.fields.beds.mapValue && doc.fields.beds.mapValue.fields) {
-      const bedsMap = doc.fields.beds.mapValue.fields;
-      for (const [key, val] of Object.entries(bedsMap)) {
-        if (val.mapValue && val.mapValue.fields) {
-          data.beds[key] = {
-            total: parseInt(val.mapValue.fields.total?.integerValue || localData.beds[key]?.total || 0),
-            available: parseInt(val.mapValue.fields.available?.integerValue || localData.beds[key]?.available || 0)
-          };
-        }
-      }
-    }
+    
     return data;
   } catch (e) {
     console.error("Parse Error:", e);
@@ -45,27 +38,20 @@ function parseFirestore(doc) {
   }
 }
 
-// Helper to convert normal JSON to Firestore format
+// Helper to convert normal JSON to Firestore format (Flattened for user visibility)
 function toFirestore(data) {
   const fields = {
     hospital: { stringValue: data.hospital || localData.hospital },
     location: { stringValue: data.location || localData.location },
     type: { stringValue: data.type || localData.type },
     registration: { stringValue: data.registration || localData.registration },
-    last_updated: { stringValue: new Date().toISOString() },
-    beds: { mapValue: { fields: {} } }
+    last_updated: { stringValue: new Date().toISOString() }
   };
   
   const bedsSource = data.beds || localData.beds;
   for (const [key, val] of Object.entries(bedsSource)) {
-    fields.beds.mapValue.fields[key] = {
-      mapValue: {
-        fields: {
-          total: { integerValue: val.total.toString() },
-          available: { integerValue: val.available.toString() }
-        }
-      }
-    };
+    fields[`${key}_total`] = { integerValue: (val.total || 0).toString() };
+    fields[`${key}_available`] = { integerValue: (val.available || 0).toString() };
   }
   return { fields };
 }
@@ -83,7 +69,6 @@ function fetchDbData() {
             return resolve(parsed);
           }
         } else if (res.statusCode === 404) {
-          // Document doesn't exist, use local data but don't cache yet
           return resolve(localData);
         }
         resolve(cachedData || localData);
@@ -97,12 +82,16 @@ function fetchDbData() {
 function saveDbData(newData) {
   cachedData = newData;
   return new Promise((resolve) => {
-    // We use PATCH with currentUpdateStrategy or similar, but here we just send the whole fields object
-    // For Firestore REST API, PATCH on a document with fields will update those fields.
-    const payload = JSON.stringify(toFirestore(newData));
+    const firestoreObj = toFirestore(newData);
+    const payload = JSON.stringify(firestoreObj);
+    
+    // Construct updateMask to tell Firestore exactly which fields we are providing
+    const fieldPaths = Object.keys(firestoreObj.fields).map(f => `updateMask.fieldPaths=${f}`).join("&");
+    const path = `${DOC_PATH}?key=${API_KEY}&${fieldPaths}`;
+
     const req = https.request({
       host: DB_HOST,
-      path: `${DOC_PATH}?key=${API_KEY}`,
+      path: path,
       method: "PATCH",
       headers: {
         "Content-Type": "application/json",
