@@ -13,46 +13,37 @@ const HospitalAPI = (() => {
   /**
    * GET /api/beds
    * Fetches current bed availability from the backend.
-   * Currently returns local state; replace with real fetch when backend is ready.
    */
   async function getBeds() {
-    const url = HospitalConfig.api.baseUrl;
-    const key = HospitalConfig.api.apiKey;
-
-    // If API is configured, make a real request
-    if (url && HospitalConfig.api.connected) {
-      try {
-        const response = await fetch(`${url}/api/beds`, {
-          method: "GET",
-          headers: {
-            "Content-Type": "application/json",
-            "X-API-Key": key,
-            "Authorization": `Bearer ${key}`,
-          },
-        });
-
-        if (!response.ok) throw new Error(`HTTP ${response.status}`);
-        const data = await response.json();
-        return { success: true, data };
-      } catch (error) {
-        console.warn("[API] GET /api/beds failed:", error.message);
-        return { success: false, error: error.message, data: AppState.toJSON() };
+    try {
+      const response = await fetch(`/api/beds`);
+      if (!response.ok) throw new Error(`HTTP ${response.status}`);
+      const result = await response.json();
+      
+      if (result.success && result.data && result.data.beds) {
+        // Sync local state
+        for (const [type, vals] of Object.entries(result.data.beds)) {
+          if (AppState.beds[type]) {
+            AppState.beds[type].total = vals.total;
+            AppState.beds[type].available = vals.available;
+          }
+        }
+        AppState.lastUpdated = result.data.last_updated || new Date().toISOString();
+        EventBus.emit("beds:updated", AppState.beds);
+        EventBus.emit("timestamp:updated", AppState.lastUpdated);
       }
+      return { success: true, data: result.data };
+    } catch (error) {
+      console.warn("[API] GET /api/beds failed (falling back to local state):", error.message);
+      return { success: true, data: AppState.toJSON(), source: "local" };
     }
-
-    // Fallback: return local state
-    return { success: true, data: AppState.toJSON(), source: "local" };
   }
 
   /**
    * POST /api/update-beds
    * Sends updated bed counts to the backend.
-   * Currently updates local state; replace with real fetch when backend is ready.
    */
   async function updateBeds(bedType, field, value) {
-    const url = HospitalConfig.api.baseUrl;
-    const key = HospitalConfig.api.apiKey;
-
     const payload = {
       hospital: HospitalConfig.name,
       bed_type: bedType,
@@ -61,11 +52,10 @@ const HospitalAPI = (() => {
       timestamp: new Date().toISOString(),
     };
 
-    // Always update local AppState immediately so UI reflects change
+    // Always update local AppState immediately so UI reflects change instantly
     if (AppState.beds[bedType]) {
       AppState.beds[bedType][field] = Math.max(0, parseInt(value) || 0);
 
-      // Ensure available never exceeds total
       if (AppState.beds[bedType].available > AppState.beds[bedType].total) {
         AppState.beds[bedType].available = AppState.beds[bedType].total;
       }
@@ -75,43 +65,35 @@ const HospitalAPI = (() => {
       EventBus.emit("timestamp:updated", AppState.lastUpdated);
     }
 
-    // If API is configured, also send to backend (fire-and-forget style)
-    if (url && HospitalConfig.api.connected) {
-      try {
-        const response = await fetch(`${url}/api/update-beds`, {
-          method: "POST",
-          headers: {
-            "Content-Type": "application/json",
-            "X-API-Key": key,
-            "Authorization": `Bearer ${key}`,
-          },
-          body: JSON.stringify(payload),
-        });
+    // Persist to backend
+    try {
+      const response = await fetch(`/api/update-beds`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(payload),
+      });
 
-        if (!response.ok) throw new Error(`HTTP ${response.status}`);
-        const result = await response.json();
+      if (!response.ok) throw new Error(`HTTP ${response.status}`);
+      const result = await response.json();
 
-        // If the server returns updated beds data, sync AppState with it
-        if (result.success && result.data && result.data.beds) {
-          for (const [type, vals] of Object.entries(result.data.beds)) {
-            if (AppState.beds[type]) {
-              AppState.beds[type].total = vals.total;
-              AppState.beds[type].available = vals.available;
-            }
+      // If the server returns updated beds data, sync AppState to ensure consistency
+      if (result.success && result.data && result.data.beds) {
+        for (const [type, vals] of Object.entries(result.data.beds)) {
+          if (AppState.beds[type]) {
+            AppState.beds[type].total = vals.total;
+            AppState.beds[type].available = vals.available;
           }
-          AppState.lastUpdated = result.data.last_updated || new Date().toISOString();
-          EventBus.emit("beds:updated", AppState.beds);
-          EventBus.emit("timestamp:updated", AppState.lastUpdated);
         }
-
-        return { success: true, data: result };
-      } catch (error) {
-        console.warn("[API] POST /api/update-beds failed:", error.message);
-        return { success: false, error: error.message };
+        AppState.lastUpdated = result.data.last_updated || new Date().toISOString();
+        EventBus.emit("beds:updated", AppState.beds);
+        EventBus.emit("timestamp:updated", AppState.lastUpdated);
       }
-    }
 
-    return { success: true, source: "local" };
+      return { success: true, data: result };
+    } catch (error) {
+      console.warn("[API] POST /api/update-beds failed:", error.message);
+      return { success: false, error: error.message };
+    }
   }
 
   /**
@@ -184,14 +166,20 @@ const HospitalAPI = (() => {
   function startPolling() {
     if (_pollingTimer) return;
 
-    _pollingTimer = setInterval(async () => {
+    const fetchTask = async () => {
       const result = await getBeds();
       if (result.success && result.data && result.source !== "local") {
         // Update state from server data
         EventBus.emit("beds:updated", result.data);
       }
       EventBus.emit("polling:tick", new Date().toISOString());
-    }, HospitalConfig.polling.intervalMs);
+    };
+
+    // Fetch immediately on start
+    fetchTask();
+
+    // Then start polling
+    _pollingTimer = setInterval(fetchTask, HospitalConfig.polling.intervalMs);
 
     HospitalConfig.polling.enabled = true;
     console.log(`[Polling] Started (every ${HospitalConfig.polling.intervalMs / 1000}s)`);
