@@ -163,19 +163,85 @@
 
     <!-- ══ TAB: API INTEGRATION ══ -->
     <section class="tab-panel" id="panel-api">
+
+      <!-- ── SHARE YOUR API (TOP - most important) ── -->
+      <div class="card" style="margin-bottom:28px;border:2px solid #bfdbfe;background:linear-gradient(135deg,#eff6ff 0%,#ffffff 100%);">
+        <div class="card-header" style="background:linear-gradient(90deg,#1e3a8a,#0ea5e9);border-radius:14px 14px 0 0;">
+          <div class="card-title" style="color:#fff;font-size:16px;">🔑 Your Hospital API Credentials — Share With Other Websites</div>
+        </div>
+        <div class="card-body">
+          <p style="font-size:13px;color:var(--gray-600);margin-bottom:20px;">
+            Copy the <strong>API URL</strong> and <strong>API Key</strong> below and paste them into the other website's
+            <em>API Integration</em> page to connect it to this hospital's live bed data.
+          </p>
+
+          <div style="display:grid;grid-template-columns:1fr 1fr;gap:20px;margin-bottom:24px;">
+            <!-- API URL -->
+            <div>
+              <label class="counter-label" style="margin-bottom:8px;display:block;color:#1e3a8a;font-weight:700;">📡 API URL (Base URL)</label>
+              <div style="display:flex;gap:8px;">
+                <input type="text" id="my-api-url" class="filter-input mono" readonly
+                  style="background:#f0f7ff;color:#1e3a8a;font-size:12px;font-weight:600;"
+                  value="https://hospital-data-green.vercel.app" />
+                <button class="btn btn-primary" style="white-space:nowrap;padding:8px 14px;font-size:12px;"
+                  id="copy-url-btn">📋 Copy</button>
+              </div>
+              <div style="font-size:11px;color:var(--gray-400);margin-top:5px;">Paste this as "API Base URL" in the other website</div>
+            </div>
+
+            <!-- API Key -->
+            <div>
+              <label class="counter-label" style="margin-bottom:8px;display:block;color:#1e3a8a;font-weight:700;">🔐 API Key</label>
+              <div style="display:flex;gap:8px;">
+                <input type="text" id="my-api-key" class="filter-input mono" readonly
+                  style="background:#f0f7ff;color:#1e3a8a;font-size:12px;font-weight:600;"
+                  value="HOSP-MUM-2026-CITYCARE-9X4K" />
+                <button class="btn btn-primary" style="white-space:nowrap;padding:8px 14px;font-size:12px;"
+                  id="copy-key-btn">📋 Copy</button>
+              </div>
+              <div style="font-size:11px;color:var(--gray-400);margin-top:5px;">Paste this as "API Key" in the other website</div>
+            </div>
+          </div>
+
+          <!-- Step-by-step guide -->
+          <div style="background:#fff;border:1px solid #bfdbfe;border-radius:10px;padding:16px;">
+            <div style="font-size:13px;font-weight:700;color:#1e3a8a;margin-bottom:12px;">⚡ Steps to connect another website to this hospital:</div>
+            <div style="display:flex;flex-direction:column;gap:10px;">
+              <div style="display:flex;align-items:flex-start;gap:12px;">
+                <div style="min-width:26px;height:26px;border-radius:50%;background:#0ea5e9;color:#fff;display:flex;align-items:center;justify-content:center;font-size:12px;font-weight:700;flex-shrink:0;">1</div>
+                <div style="font-size:13px;color:var(--gray-600);">On the other website, open the <strong>API Integration</strong> tab</div>
+              </div>
+              <div style="display:flex;align-items:flex-start;gap:12px;">
+                <div style="min-width:26px;height:26px;border-radius:50%;background:#0ea5e9;color:#fff;display:flex;align-items:center;justify-content:center;font-size:12px;font-weight:700;flex-shrink:0;">2</div>
+                <div style="font-size:13px;color:var(--gray-600);">Paste the <strong>API URL</strong> above into its "API Base URL" field</div>
+              </div>
+              <div style="display:flex;align-items:flex-start;gap:12px;">
+                <div style="min-width:26px;height:26px;border-radius:50%;background:#0ea5e9;color:#fff;display:flex;align-items:center;justify-content:center;font-size:12px;font-weight:700;flex-shrink:0;">3</div>
+                <div style="font-size:13px;color:var(--gray-600);">Paste the <strong>API Key</strong> above into its "API Key" field</div>
+              </div>
+              <div style="display:flex;align-items:flex-start;gap:12px;">
+                <div style="min-width:26px;height:26px;border-radius:50%;background:#22c55e;color:#fff;display:flex;align-items:center;justify-content:center;font-size:12px;font-weight:700;flex-shrink:0;">4</div>
+                <div style="font-size:13px;color:var(--gray-600);">Click <strong>"Connect API"</strong> on that site — it will now sync live bed data from this hospital ✅</div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- ── CONNECT TO ANOTHER SYSTEM + STATUS + ENDPOINTS ── -->
       <div class="two-col">
-        <!-- API Configuration -->
+        <!-- API Configuration (connect this dashboard to a central system) -->
         <div class="card">
-          <div class="card-header"><div class="card-title">🔗 API Configuration</div></div>
+          <div class="card-header"><div class="card-title">🔗 Connect to Another System</div></div>
           <div class="card-body">
             <div style="margin-bottom:16px;">
               <label class="counter-label" style="margin-bottom:6px;display:block;">API Base URL</label>
               <input type="url" class="filter-input mono" id="api-url" placeholder="https://your-central-system.vercel.app" />
-              <div style="font-size:11px;color:var(--gray-400);margin-top:4px;">The URL of the main tracking system that aggregates hospitals</div>
+              <div style="font-size:11px;color:var(--gray-400);margin-top:4px;">URL of the central tracking system that collects data from all hospitals</div>
             </div>
             <div style="margin-bottom:16px;">
               <label class="counter-label" style="margin-bottom:6px;display:block;">API Key</label>
-              <input type="password" class="filter-input mono" id="api-key" placeholder="Enter your API key" />
+              <input type="password" class="filter-input mono" id="api-key" placeholder="Enter API key from the central system" />
             </div>
             <div style="display:flex;gap:10px;">
               <button class="btn btn-primary" id="connect-api-btn">🔗 Connect API</button>
@@ -193,18 +259,18 @@
           </div>
         </div>
 
-        <!-- API Docs & Status -->
+        <!-- Status + Endpoints -->
         <div>
           <div class="card" style="margin-bottom:24px;">
             <div class="card-header"><div class="card-title">📡 Connection Status</div></div>
             <div class="card-body" id="api-status-area" style="text-align:center;padding:30px;">
               <div style="font-size:40px;margin-bottom:10px;">🔌</div>
               <div style="font-size:14px;font-weight:600;color:var(--gray-700);">Not Connected</div>
-              <div style="font-size:12px;color:var(--gray-500);margin-top:4px;">Configure settings to sync with central system</div>
+              <div style="font-size:12px;color:var(--gray-500);margin-top:4px;">Configure settings above to sync with a central system</div>
             </div>
           </div>
           <div class="card">
-            <div class="card-header"><div class="card-title">📖 Available API Endpoints</div></div>
+            <div class="card-header"><div class="card-title">📖 This Hospital's API Endpoints</div></div>
             <div class="card-body">
               <div class="api-endpoint">
                 <span class="method-badge get">GET</span>

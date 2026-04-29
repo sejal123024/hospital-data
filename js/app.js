@@ -223,7 +223,10 @@ const App = (() => {
       pt.checked = HospitalConfig.polling.enabled;
       pt.addEventListener("change", () => { pt.checked ? HospitalAPI.startPolling() : HospitalAPI.stopPolling(); showToast(pt.checked ? "Auto-sync on" : "Auto-sync off", "info"); });
     }
-    // Copy/Export
+    // Copy this hospital's own URL and key
+    $("#copy-url-btn")?.addEventListener("click", () => copyField("my-api-url", "✅ API URL copied!"));
+    $("#copy-key-btn")?.addEventListener("click", () => copyField("my-api-key", "✅ API Key copied!"));
+    // Copy/Export JSON
     const copyHandler = () => {
       const json = HospitalAPI.exportData();
       if (navigator.clipboard && window.isSecureContext) {
@@ -237,6 +240,14 @@ const App = (() => {
       const a = document.createElement("a"); a.href = URL.createObjectURL(blob);
       a.download = `hospital_data_${Date.now()}.json`; a.click(); showToast("Exported!", "success");
     });
+  }
+
+  function copyField(inputId, successMsg) {
+    const el = $(`#${inputId}`); if (!el) return;
+    const text = el.value;
+    if (navigator.clipboard && window.isSecureContext) {
+      navigator.clipboard.writeText(text).then(() => showToast(successMsg || "Copied!", "success")).catch(() => copyFB(text));
+    } else { copyFB(text); showToast(successMsg || "Copied!", "success"); }
   }
 
   function copyFB(text) {
@@ -301,7 +312,7 @@ const App = (() => {
     setTimeout(tick, 12000);
   }
 
-  return { init, switchTab, showToast, adjustBed, setBed };
+  return { init, switchTab, showToast, adjustBed, setBed, copyField };
 })();
 
 document.addEventListener("DOMContentLoaded", App.init);
